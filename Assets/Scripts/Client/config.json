@@ -1,0 +1,7 @@
+{
+	"packageName": "Alps",
+	"clientPackage": "Alps.Client",
+	"targetFramework": "v3.5",
+	"optionalAssemblyInfo": false,
+	"validatable": false
+}
