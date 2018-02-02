@@ -6,12 +6,16 @@ using System;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections.Generic;
+using System.Collections;
+using System.Linq;
 
 public class MatchMore
 {
     private ApiClient client;
     private DeviceApi deviceApi;
     private MatchmoreState state;
+    private GameObject obj;
+    private CoroutineWrapper _coroutine;
 
     public string Environment { get; set; }
 
@@ -24,7 +28,9 @@ public class MatchMore
         if (string.IsNullOrEmpty(environment))
         {
             Environment = "https://35.201.116.232/v5";
-        }else{
+        }
+        else
+        {
             Environment = environment;
         }
 
@@ -32,12 +38,13 @@ public class MatchMore
         {
             ApiKey = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZTcxMmE1YjEtMDNkMi00NmFlLWE1NDEtOGFjZmFiMGJjM2M0IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTY4MjA4MzIsImlhdCI6MTUxNjgyMDgzMiwianRpIjoiMSJ9.SyRjVl-4yss3oUUiZ1GPwl9uEt76H3npwDiuISSCmbcu-qCDUmnzfpMOXG7I7hqJUcCZoFxRINDMDFUdTACKQw";
         }
-        else{
+        else
+        {
             ApiKey = apiKey;
         }
 
         PersistenceFile = "matchmore.dat";
-        Init(); 
+        Init();
     }
 
     private void Init()
@@ -46,6 +53,8 @@ public class MatchMore
         client.AddDefaultHeader("api-key", ApiKey);
         deviceApi = new DeviceApi(client);
         Load();
+        obj = new GameObject("MatchMoreObject");
+        _coroutine = obj.AddComponent<CoroutineWrapper>();
     }
 
     private string PersistencePath
@@ -60,11 +69,14 @@ public class MatchMore
     {
         var file = PersistencePath;
         var fs = new FileStream(file, FileMode.OpenOrCreate);
-        if(fs.Length == 0){
+        if (fs.Length == 0)
+        {
             state = new MatchmoreState();
-        }else{
+        }
+        else
+        {
             var formatter = new BinaryFormatter();
-            state = formatter.Deserialize(fs) as MatchmoreState;            
+            state = formatter.Deserialize(fs) as MatchmoreState;
         }
 
         fs.Close();
@@ -73,7 +85,7 @@ public class MatchMore
     private void Save()
     {
         var formatter = new BinaryFormatter();
-        var fs =new FileStream(PersistenceFile, FileMode.Truncate);
+        var fs = new FileStream(PersistenceFile, FileMode.Truncate);
         formatter.Serialize(fs, state);
         fs.Close();
     }
@@ -122,7 +134,8 @@ public class MatchMore
             //    throw new ArgumentException("Platform required for Mobile Device");
             //}
 
-            if(string.IsNullOrEmpty(mobileDevice.Platform)){
+            if (string.IsNullOrEmpty(mobileDevice.Platform))
+            {
                 mobileDevice.Platform = Application.platform.ToString();
             }
 
@@ -158,11 +171,14 @@ public class MatchMore
         return resultingDevice;
     }
 
-    public Subscription CreateSubscription(Device device, Subscription sub){
+    public Subscription CreateSubscription(Device device, Subscription sub)
+    {
         return CreateSubscription(device.Id, sub);
     }
-    public Subscription CreateSubscription(string deviceId, Subscription sub){
-        if(string.IsNullOrEmpty(deviceId)){
+    public Subscription CreateSubscription(string deviceId, Subscription sub)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
             throw new ArgumentException("Device Id null or empty");
         }
 
@@ -170,7 +186,8 @@ public class MatchMore
         return createdSub;
     }
 
-    public Publication CreatePublication(Device device, Publication pub){
+    public Publication CreatePublication(Device device, Publication pub)
+    {
         return CreatePublication(device.Id, pub);
     }
 
@@ -185,7 +202,8 @@ public class MatchMore
         return createdPub;
     }
 
-    public Location UpdateLocation(Device device, Location location) {
+    public Location UpdateLocation(Device device, Location location)
+    {
         return UpdateLocation(device.Id, location);
     }
 
@@ -202,15 +220,57 @@ public class MatchMore
         return deviceApi.CreateLocation(deviceId, location);
     }
 
-    public List<Match> GetMatches(Device device){
+    public List<Match> GetMatches(Device device)
+    {
         return GetMatches(device.Id);
     }
-    public List<Match> GetMatches(string deviceId){
+
+    public List<Match> GetMatches(string deviceId)
+    {
         if (string.IsNullOrEmpty(deviceId))
         {
             throw new ArgumentException("Device Id null or empty");
         }
 
         return deviceApi.GetMatches(deviceId);
+    }
+
+    public void SubscribeMatches(Device device, Action<List<Match>> func)
+    {
+        SubscribeMatches(device.Id, func);
+    }
+
+    public void SubscribeMatches(string deviceId, Action<List<Match>> func)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            throw new ArgumentException("Device Id null or empty");
+        }
+
+        List<Match> previous = new List<Match>();
+
+        _coroutine.Setup(deviceId, () => {
+            var m = GetMatches(deviceId);
+            var matches = m.Except(previous, new MatchComparer()).ToList();
+            func(matches);
+            previous = matches;
+        });
+    }
+
+    private class Coroutine: MonoBehaviour {
+        
+    }
+
+    private class MatchComparer : IEqualityComparer<Match>
+    {
+        public bool Equals(Match x, Match y)
+        {
+            return x.Id == y.Id;
+        }
+
+        public int GetHashCode(Match obj)
+        {
+            return obj.GetHashCode();
+        }
     }
 }
