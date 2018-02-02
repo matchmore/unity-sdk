@@ -221,7 +221,6 @@ namespace Alps.Client
                 {
                     NullValueHandling = NullValueHandling.Ignore
                 }) : null;
-                UnityEngine.MonoBehaviour.print(json);
                 return json;
             }
             catch (Exception e)

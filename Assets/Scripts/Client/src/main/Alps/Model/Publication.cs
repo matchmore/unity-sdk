@@ -74,7 +74,7 @@ namespace Alps.Model {
     /// <value>The dictionary of key, value pairs. Allowed values are number, boolean, string and array of afformentioned types</value>
     [DataMember(Name="properties", EmitDefaultValue=false)]
     [JsonProperty(PropertyName = "properties")]
-    public Object Properties { get; set; }
+    public Dictionary<string, Object> Properties { get; set; }
 
 
     /// <summary>
