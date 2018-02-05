@@ -64,6 +64,37 @@ public class MatchMoreTest
         Assert.IsNotNull(match);
     }
 
+    [UnityTest]
+    public IEnumerator Add_device_pub_sub_and_get_match_via_web_socket()
+    {
+        var matchMore = new MatchMore("eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZTcxMmE1YjEtMDNkMi00NmFlLWE1NDEtOGFjZmFiMGJjM2M0IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTY4MjA4MzIsImlhdCI6MTUxNjgyMDgzMiwianRpIjoiMSJ9.SyRjVl-4yss3oUUiZ1GPwl9uEt76H3npwDiuISSCmbcu-qCDUmnzfpMOXG7I7hqJUcCZoFxRINDMDFUdTACKQw");
+        Device subDevice;
+        Subscription sub;
+        Publication pub;
+        SetupMatch(matchMore, out subDevice, out sub, out pub);
+
+        Match match = null;
+
+        matchMore.SubscribeMatchesWithWS(subDevice, matches => {
+            match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
+        });
+
+        for (int i = 10 - 1; i >= 0; i--)
+        {
+            if (match != null)
+            {
+                break;
+            }
+            else
+            {
+                yield return new WaitForSeconds(3);
+            }
+        }
+
+        Assert.IsNotNull(match);
+    }
+
+
     private static void SetupMatch(MatchMore matchMore, out Device subDevice, out Subscription sub, out Publication pub)
     {
         

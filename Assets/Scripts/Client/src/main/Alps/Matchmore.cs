@@ -6,16 +6,18 @@ using System;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections.Generic;
-using System.Collections;
 using System.Linq;
+using WebSocketSharp;
 
 public class MatchMore
 {
+    public const string API_VERSION = "v5";
     private ApiClient client;
     private DeviceApi deviceApi;
     private MatchmoreState state;
     private GameObject _obj;
     private CoroutineWrapper _coroutine;
+    private WebSocket _ws;
 
     public string Environment { get; set; }
 
@@ -23,11 +25,20 @@ public class MatchMore
 
     public string PersistenceFile { get; set; }
 
+
+    public string ApiUrl
+    {
+        get
+        {
+            return String.Format("https://{0}/{1}", Environment, API_VERSION);
+        }
+    }
+
     public MatchMore(string apiKey = null, string environment = null)
     {
         if (string.IsNullOrEmpty(environment))
         {
-            Environment = "https://35.201.116.232/v5";
+            Environment = "35.201.116.232";
         }
         else
         {
@@ -45,16 +56,31 @@ public class MatchMore
 
         PersistenceFile = "matchmore.dat";
         Init();
+        Load();
     }
 
     private void Init()
     {
-        client = new ApiClient(Environment);
+        client = new ApiClient(ApiUrl);
         client.AddDefaultHeader("api-key", ApiKey);
         deviceApi = new DeviceApi(client);
-        Load();
         _obj = new GameObject("MatchMoreObject");
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
+    }
+
+    private void StartWebSocket()
+    {
+        var url = String.Format("ws://{0}/pusher/{1}/ws/{2}", Environment, API_VERSION, state.Device.Id);
+        _ws = new WebSocket(url, new string[] { "Sec-WebSocket-Protocol", "api-key", ApiKey })
+        {
+            EmitOnPing = true
+        };
+     
+        _ws.OnOpen += (sender, e) => UnityEngine.MonoBehaviour.print("On Open " + e);
+        _ws.OnClose += (sender, e) => UnityEngine.MonoBehaviour.print("On Close " + e.Code);
+        _ws.OnError += (sender, e) => UnityEngine.MonoBehaviour.print("On Error " + e.Message);
+        _ws.OnMessage += (sender, e) => UnityEngine.MonoBehaviour.print("On Message " + e.Data);
+         _ws.Connect();
     }
 
     private string PersistencePath
@@ -240,12 +266,30 @@ public class MatchMore
 
         List<Match> previous = new List<Match>();
 
-        _coroutine.Setup(deviceId, () => {
+        _coroutine.Setup(deviceId, () =>
+        {
             var m = GetMatches(deviceId);
             var matches = m.Except(previous, new MatchComparer()).ToList();
             func(matches);
             previous = matches;
         });
+    }
+
+    public void SubscribeMatchesWithWS(Device device, Action<List<Match>> func)
+    {
+        SubscribeMatchesWithWS(device.Id, func);
+    }
+
+    public void SubscribeMatchesWithWS(string deviceId, Action<List<Match>> func)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            throw new ArgumentException("Device Id null or empty");
+        }
+
+        List<Match> previous = new List<Match>();
+
+        StartWebSocket();
     }
 
     private class MatchComparer : IEqualityComparer<Match>
@@ -261,12 +305,20 @@ public class MatchMore
         }
     }
 
-    ~MatchMore(){
-        if(_coroutine != null){
+    ~MatchMore()
+    {
+        if (_ws != null)
+        {
+            _ws.Close();
+        }
+        if (_coroutine != null)
+        {
             UnityEngine.Object.Destroy(_coroutine);
         }
-        if(_obj != null){
+        if (_obj != null)
+        {
             UnityEngine.Object.Destroy(_obj);
         }
+
     }
 }
