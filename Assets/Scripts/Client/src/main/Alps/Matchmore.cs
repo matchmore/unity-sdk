@@ -14,7 +14,7 @@ public class MatchMore
     private ApiClient client;
     private DeviceApi deviceApi;
     private MatchmoreState state;
-    private GameObject obj;
+    private GameObject _obj;
     private CoroutineWrapper _coroutine;
 
     public string Environment { get; set; }
@@ -53,8 +53,8 @@ public class MatchMore
         client.AddDefaultHeader("api-key", ApiKey);
         deviceApi = new DeviceApi(client);
         Load();
-        obj = new GameObject("MatchMoreObject");
-        _coroutine = obj.AddComponent<CoroutineWrapper>();
+        _obj = new GameObject("MatchMoreObject");
+        _coroutine = _obj.AddComponent<CoroutineWrapper>();
     }
 
     private string PersistencePath
@@ -124,15 +124,6 @@ public class MatchMore
         {
             var mobileDevice = device as MobileDevice;
             mobileDevice.DeviceType = Alps.Model.DeviceType.Mobile;
-            //if (string.IsNullOrEmpty(mobileDevice.DeviceToken))
-            //{
-            //    throw new ArgumentException("Device token required for Mobile Device");
-            //}
-
-            //if (string.IsNullOrEmpty(mobileDevice.Platform))
-            //{
-            //    throw new ArgumentException("Platform required for Mobile Device");
-            //}
 
             if (string.IsNullOrEmpty(mobileDevice.Platform))
             {
@@ -257,10 +248,6 @@ public class MatchMore
         });
     }
 
-    private class Coroutine: MonoBehaviour {
-        
-    }
-
     private class MatchComparer : IEqualityComparer<Match>
     {
         public bool Equals(Match x, Match y)
@@ -271,6 +258,15 @@ public class MatchMore
         public int GetHashCode(Match obj)
         {
             return obj.GetHashCode();
+        }
+    }
+
+    ~MatchMore(){
+        if(_coroutine != null){
+            UnityEngine.Object.Destroy(_coroutine);
+        }
+        if(_obj != null){
+            UnityEngine.Object.Destroy(_obj);
         }
     }
 }

@@ -7,8 +7,6 @@ using System.Collections.Generic;
 
 public class MatchMoreTest
 {
-
-
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_poll()
     {
@@ -90,7 +88,7 @@ public class MatchMoreTest
         {
             Topic = "Unity",
             Duration = 30,
-            Range = 1000,
+            Range = 100,
             Selector = "test = true and price <= 200",
             Pushers = new List<string>()
         });
@@ -101,7 +99,7 @@ public class MatchMoreTest
         {
             Topic = "Unity",
             Duration = 30,
-            Range = 1000,
+            Range = 100,
             Properties = new Dictionary<string, object>(){
                 {"test", true},
                 {"price", 199}
