@@ -72,11 +72,10 @@ namespace Alps.Api
         /// <summary>
         /// Get match for the device by its id 
         /// </summary>
-        /// <param name="userId">The id (UUID) of the user of the device.</param>
         /// <param name="deviceId">The id (UUID) of the user device.</param>
         /// <param name="matchId">The id (UUID) of the match.</param>
         /// <returns>Match</returns>
-        Match GetMatch (string userId, string deviceId, string matchId);
+        Match GetMatch (string deviceId, string matchId);
         /// <summary>
         /// Get matches for the device 
         /// </summary>
@@ -532,17 +531,12 @@ path = path.Replace("{" + "subscriptionId" + "}", ApiClient.ParameterToString(su
     
         /// <summary>
         /// Get match for the device by its id 
-        /// </summary>
-        /// <param name="userId">The id (UUID) of the user of the device.</param> 
+        /// </summary> 
         /// <param name="deviceId">The id (UUID) of the user device.</param> 
         /// <param name="matchId">The id (UUID) of the match.</param> 
         /// <returns>Match</returns>            
-        public Match GetMatch (string userId, string deviceId, string matchId)
+        public Match GetMatch (string deviceId, string matchId)
         {
-            
-            // verify the required parameter 'userId' is set
-            if (userId == null) throw new ApiException(400, "Missing required parameter 'userId' when calling GetMatch");
-            
             // verify the required parameter 'deviceId' is set
             if (deviceId == null) throw new ApiException(400, "Missing required parameter 'deviceId' when calling GetMatch");
             
@@ -552,7 +546,6 @@ path = path.Replace("{" + "subscriptionId" + "}", ApiClient.ParameterToString(su
     
             var path = "/devices/{deviceId}/matches/{matchId}";
             path = path.Replace("{format}", "json");
-            path = path.Replace("{" + "userId" + "}", ApiClient.ParameterToString(userId));
 path = path.Replace("{" + "deviceId" + "}", ApiClient.ParameterToString(deviceId));
 path = path.Replace("{" + "matchId" + "}", ApiClient.ParameterToString(matchId));
     

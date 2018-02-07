@@ -8,6 +8,8 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using WebSocketSharp;
+using System.Text;
+using Newtonsoft.Json;
 
 public class MatchMore
 {
@@ -18,10 +20,23 @@ public class MatchMore
     private GameObject _obj;
     private CoroutineWrapper _coroutine;
     private WebSocket _ws;
+    private string _environment;
+    private string _apiKey;
+    private bool _secured;
+    private string _worldId;
+    private bool _websocketStarted = false;
 
-    public string Environment { get; set; }
-
-    public string ApiKey { get; set; }
+    public Device MainDevice
+    {
+        get
+        {
+            return state.Device;
+        }
+        set
+        {
+            state.Device = value;
+        }
+    }
 
     public string PersistenceFile { get; set; }
 
@@ -30,57 +45,82 @@ public class MatchMore
     {
         get
         {
-            return String.Format("https://{0}/{1}", Environment, API_VERSION);
+            var protocol = _secured ? "https" : "http";
+            return String.Format("{2}://{0}:9000/{1}", _environment, API_VERSION, protocol);
         }
     }
 
-    public MatchMore(string apiKey = null, string environment = null)
+    public class ApiKeyObject
+    {
+        public string Sub { get; set; }
+    }
+
+    public MatchMore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
     {
         if (string.IsNullOrEmpty(environment))
         {
-            Environment = "35.201.116.232";
-        }
-        else
-        {
-            Environment = environment;
+            throw new ArgumentException("Environment null or empty");
         }
 
         if (string.IsNullOrEmpty(apiKey))
         {
-            ApiKey = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZTcxMmE1YjEtMDNkMi00NmFlLWE1NDEtOGFjZmFiMGJjM2M0IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTY4MjA4MzIsImlhdCI6MTUxNjgyMDgzMiwianRpIjoiMSJ9.SyRjVl-4yss3oUUiZ1GPwl9uEt76H3npwDiuISSCmbcu-qCDUmnzfpMOXG7I7hqJUcCZoFxRINDMDFUdTACKQw";
+            throw new ArgumentException("Api key null or empty");
+        }
+
+        if (string.IsNullOrEmpty(worldId))
+        {
+            ApiKeyObject deserializedApiKey = ExtractWorldId(apiKey);
+            _worldId = deserializedApiKey.Sub;
         }
         else
         {
-            ApiKey = apiKey;
+            _worldId = worldId;
         }
+
+        _environment = environment;
+        _apiKey = apiKey;
+        _secured = secured;
 
         PersistenceFile = "matchmore.dat";
         Init();
         Load();
+        if (websocket)
+        {
+            StartWebSocket();
+        }
     }
 
     private void Init()
     {
         client = new ApiClient(ApiUrl);
-        client.AddDefaultHeader("api-key", ApiKey);
+        client.AddDefaultHeader("api-key", _apiKey);
         deviceApi = new DeviceApi(client);
-        _obj = new GameObject("MatchMoreObject");
+        _obj = new GameObject("MatchMoreObject_" + UnityEngine.Random.Range(0, 100));
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
     }
 
-    private void StartWebSocket()
+    public void StartWebSocket(string forDeviceId = null)
     {
-        var url = String.Format("ws://{0}/pusher/{1}/ws/{2}", Environment, API_VERSION, state.Device.Id);
-        _ws = new WebSocket(url, new string[] { "Sec-WebSocket-Protocol", "api-key", ApiKey })
+        if (_websocketStarted)
+            return;
+        
+        var deviceId = string.IsNullOrEmpty(forDeviceId) ? state.Device.Id : forDeviceId;
+        var protocol = _secured ? "wss" : "ws";
+        var url = String.Format("{3}://{0}:9001/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol);
+        _ws = new WebSocket(url, "api-key", _worldId);
+
+        //_ws.OnOpen += (sender, e) => UnityEngine.MonoBehaviour.print("On Open " + e);
+        //_ws.OnClose += (sender, e) => UnityEngine.MonoBehaviour.print("On Close " + e.Code);
+        //_ws.OnError += (sender, e) => UnityEngine.MonoBehaviour.print("On Error " + e.Message);
+        _ws.OnMessage += (sender, e) =>
         {
-            EmitOnPing = true
+            if (e.Data == "ping")
+            {
+                _ws.Send("pong");
+            }
         };
-     
-        _ws.OnOpen += (sender, e) => UnityEngine.MonoBehaviour.print("On Open " + e);
-        _ws.OnClose += (sender, e) => UnityEngine.MonoBehaviour.print("On Close " + e.Code);
-        _ws.OnError += (sender, e) => UnityEngine.MonoBehaviour.print("On Error " + e.Message);
-        _ws.OnMessage += (sender, e) => UnityEngine.MonoBehaviour.print("On Message " + e.Data);
-         _ws.Connect();
+        _ws.Connect();
+        _websocketStarted = true;
     }
 
     private string PersistencePath
@@ -151,10 +191,8 @@ public class MatchMore
             var mobileDevice = device as MobileDevice;
             mobileDevice.DeviceType = Alps.Model.DeviceType.Mobile;
 
-            if (string.IsNullOrEmpty(mobileDevice.Platform))
-            {
-                mobileDevice.Platform = Application.platform.ToString();
-            }
+            mobileDevice.Platform = string.IsNullOrEmpty(mobileDevice.Platform) ? Application.platform.ToString() : mobileDevice.Platform;
+            mobileDevice.DeviceToken = string.IsNullOrEmpty(mobileDevice.DeviceToken) ? "" : mobileDevice.DeviceToken;
 
             createdDevice = mobileDevice;
         }
@@ -182,8 +220,6 @@ public class MatchMore
         }
 
         var resultingDevice = deviceApi.CreateDevice(createdDevice);
-
-        state.Device = resultingDevice;
 
         return resultingDevice;
     }
@@ -287,9 +323,21 @@ public class MatchMore
             throw new ArgumentException("Device Id null or empty");
         }
 
-        List<Match> previous = new List<Match>();
+        StartWebSocket(deviceId);
 
-        StartWebSocket();
+        List<Match> previous = new List<Match>();
+        _ws.OnMessage += (sender, e) =>
+        {
+            var match = deviceApi.GetMatch(deviceId, e.Data);
+            var existing = previous.Find(m => m.Id == match.Id);
+            if (existing == null)
+            {
+                func(new List<Match> { match });
+            }
+
+            previous = previous.Concat(new List<Match> { match }).ToList();
+
+        };
     }
 
     private class MatchComparer : IEqualityComparer<Match>
@@ -319,6 +367,13 @@ public class MatchMore
         {
             UnityEngine.Object.Destroy(_obj);
         }
+    }
 
+    private static ApiKeyObject ExtractWorldId(string apiKey)
+    {
+        var subjectData = Convert.FromBase64String(apiKey.Split('.')[1]);
+        var subject = Encoding.UTF8.GetString(subjectData);
+        var deserializedApiKey = JsonConvert.DeserializeObject<ApiKeyObject>(subject);
+        return deserializedApiKey;
     }
 }

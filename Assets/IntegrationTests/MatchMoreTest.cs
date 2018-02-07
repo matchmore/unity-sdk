@@ -7,14 +7,17 @@ using System.Collections.Generic;
 
 public class MatchMoreTest
 {
+    public const string API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZDY5MDVhYmEtNmEzOS00ZmU5LTg3NGYtNzM4ZGZlNDc1YjhkIiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTgwMDY4ODQsImlhdCI6MTUxODAwNjg4NCwianRpIjoiMSJ9.qP_tlXTeqZu-rG6ZNYuSYpbfMna6251WbwqCAh3xSYOMiXnca6WJkwEqcBytjYv3FdWtgGxt_yHXBj0uQ21vhQ";
+    public const string ENVIRONMENT = "localhost";
+
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_poll()
     {
-        var matchMore = new MatchMore("eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZTcxMmE1YjEtMDNkMi00NmFlLWE1NDEtOGFjZmFiMGJjM2M0IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTY4MjA4MzIsImlhdCI6MTUxNjgyMDgzMiwianRpIjoiMSJ9.SyRjVl-4yss3oUUiZ1GPwl9uEt76H3npwDiuISSCmbcu-qCDUmnzfpMOXG7I7hqJUcCZoFxRINDMDFUdTACKQw");
-        Device subDevice;
+        var matchMore = new MatchMore(API_KEY, ENVIRONMENT, secured: false);
+        Device subDevice = CreateSubscribingMobileDevice(matchMore);
         Subscription sub;
         Publication pub;
-        SetupMatch(matchMore, out subDevice, out sub, out pub);
+        SetupMatch(matchMore, subDevice, out sub, out pub);
 
         Match match = null;
         for (int i = 10 - 1; i >= 0; i--)
@@ -37,20 +40,21 @@ public class MatchMoreTest
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_subsciption()
     {
-        var matchMore = new MatchMore("eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZTcxMmE1YjEtMDNkMi00NmFlLWE1NDEtOGFjZmFiMGJjM2M0IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTY4MjA4MzIsImlhdCI6MTUxNjgyMDgzMiwianRpIjoiMSJ9.SyRjVl-4yss3oUUiZ1GPwl9uEt76H3npwDiuISSCmbcu-qCDUmnzfpMOXG7I7hqJUcCZoFxRINDMDFUdTACKQw");
-        Device subDevice;
+        var matchMore = new MatchMore(API_KEY, ENVIRONMENT, secured: false);
+        Device subDevice = CreateSubscribingMobileDevice(matchMore);
         Subscription sub;
         Publication pub;
-        SetupMatch(matchMore, out subDevice, out sub, out pub);
+        SetupMatch(matchMore, subDevice, out sub, out pub);
 
         Match match = null;
-   
-        matchMore.SubscribeMatches(subDevice, matches => {
+
+        matchMore.SubscribeMatches(subDevice, matches =>
+        {
             match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
         });
 
         for (int i = 10 - 1; i >= 0; i--)
-        {           
+        {
             if (match != null)
             {
                 break;
@@ -67,15 +71,21 @@ public class MatchMoreTest
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_web_socket()
     {
-        var matchMore = new MatchMore("eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZTcxMmE1YjEtMDNkMi00NmFlLWE1NDEtOGFjZmFiMGJjM2M0IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTY4MjA4MzIsImlhdCI6MTUxNjgyMDgzMiwianRpIjoiMSJ9.SyRjVl-4yss3oUUiZ1GPwl9uEt76H3npwDiuISSCmbcu-qCDUmnzfpMOXG7I7hqJUcCZoFxRINDMDFUdTACKQw");
-        Device subDevice;
+        var matchMore = new MatchMore(API_KEY, ENVIRONMENT, secured: false);
+        Device subDevice = CreateSubscribingMobileDevice(matchMore);
+
+        matchMore.StartWebSocket(subDevice.Id);
+        yield return new WaitForSeconds(3);
+
         Subscription sub;
         Publication pub;
-        SetupMatch(matchMore, out subDevice, out sub, out pub);
+        SetupMatch(matchMore, subDevice, out sub, out pub);
+
 
         Match match = null;
 
-        matchMore.SubscribeMatchesWithWS(subDevice, matches => {
+        matchMore.SubscribeMatchesWithWS(subDevice, matches =>
+        {
             match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
         });
 
@@ -94,23 +104,28 @@ public class MatchMoreTest
         Assert.IsNotNull(match);
     }
 
-
-    private static void SetupMatch(MatchMore matchMore, out Device subDevice, out Subscription sub, out Publication pub)
+    private static Device CreateSubscribingMobileDevice(MatchMore matchMore)
     {
-        
-        subDevice = matchMore.CreateDevice(new MobileDevice
+        Device subDevice = matchMore.CreateDevice(new MobileDevice
         {
             Name = "Subscriber",
             DeviceToken = ""
         });
         Assert.NotNull(subDevice);
         Assert.NotNull(subDevice.Id);
+        return subDevice;
+    }
+
+    private static void SetupMatch(MatchMore matchMore, Device subDevice, out Subscription sub, out Publication pub)
+    {
+ 
+        matchMore.MainDevice = subDevice;
 
         var pubDevice = matchMore.CreateDevice(new MobileDevice
         {
-            Name = "Publisher",
-            DeviceToken = "",
+            Name = "Publisher"
         });
+
 
         Assert.NotNull(pubDevice);
         Assert.NotNull(pubDevice.Id);
@@ -121,7 +136,7 @@ public class MatchMoreTest
             Duration = 30,
             Range = 100,
             Selector = "test = true and price <= 200",
-            Pushers = new List<string>()
+            Pushers = new List<string>(){"ws"}
         });
         Assert.NotNull(sub);
         Assert.NotNull(sub.Id);
