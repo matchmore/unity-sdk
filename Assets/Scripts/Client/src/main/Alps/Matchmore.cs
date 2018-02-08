@@ -4,19 +4,19 @@ using Alps.Model;
 using Alps.Api;
 using System;
 using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using WebSocketSharp;
 using System.Text;
 using Newtonsoft.Json;
+using Matchmore.Persistence;
 
 public class MatchMore
 {
     public const string API_VERSION = "v5";
-    private ApiClient client;
-    private DeviceApi deviceApi;
-    private MatchmoreState state;
+    private ApiClient _client;
+    private DeviceApi _deviceApi;
+    private StateManager _state;
     private GameObject _obj;
     private CoroutineWrapper _coroutine;
     private WebSocket _ws;
@@ -30,16 +30,13 @@ public class MatchMore
     {
         get
         {
-            return state.Device;
+            return _state.Device;
         }
         set
         {
-            state.Device = value;
+            _state.Device = value;
         }
     }
-
-    public string PersistenceFile { get; set; }
-
 
     public string ApiUrl
     {
@@ -49,6 +46,7 @@ public class MatchMore
             return String.Format("{2}://{0}:9000/{1}", _environment, API_VERSION, protocol);
         }
     }
+
 
     public class ApiKeyObject
     {
@@ -81,9 +79,12 @@ public class MatchMore
         _apiKey = apiKey;
         _secured = secured;
 
-        PersistenceFile = "matchmore.dat";
         Init();
-        Load();
+
+        _state = new StateManager();
+
+        _coroutine.Setup("persistence", _state.CheckDuration);
+
         if (websocket)
         {
             StartWebSocket();
@@ -92,9 +93,9 @@ public class MatchMore
 
     private void Init()
     {
-        client = new ApiClient(ApiUrl);
-        client.AddDefaultHeader("api-key", _apiKey);
-        deviceApi = new DeviceApi(client);
+        _client = new ApiClient(ApiUrl);
+        _client.AddDefaultHeader("api-key", _apiKey);
+        _deviceApi = new DeviceApi(_client);
         _obj = new GameObject("MatchMoreObject_" + UnityEngine.Random.Range(0, 100));
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
     }
@@ -103,8 +104,8 @@ public class MatchMore
     {
         if (_websocketStarted)
             return;
-        
-        var deviceId = string.IsNullOrEmpty(forDeviceId) ? state.Device.Id : forDeviceId;
+
+        var deviceId = string.IsNullOrEmpty(forDeviceId) ? _state.Device.Id : forDeviceId;
         var protocol = _secured ? "wss" : "ws";
         var url = String.Format("{3}://{0}:9001/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol);
         _ws = new WebSocket(url, "api-key", _worldId);
@@ -123,42 +124,9 @@ public class MatchMore
         _websocketStarted = true;
     }
 
-    private string PersistencePath
-    {
-        get
-        {
-            return Application.persistentDataPath + "/" + PersistenceFile;
-        }
-    }
-
-    private void Load()
-    {
-        var file = PersistencePath;
-        var fs = new FileStream(file, FileMode.OpenOrCreate);
-        if (fs.Length == 0)
-        {
-            state = new MatchmoreState();
-        }
-        else
-        {
-            var formatter = new BinaryFormatter();
-            state = formatter.Deserialize(fs) as MatchmoreState;
-        }
-
-        fs.Close();
-    }
-
-    private void Save()
-    {
-        var formatter = new BinaryFormatter();
-        var fs = new FileStream(PersistenceFile, FileMode.Truncate);
-        formatter.Serialize(fs, state);
-        fs.Close();
-    }
-
     public Device CreateDevice(Device device)
     {
-        if (state == null)
+        if (_state == null)
         {
             throw new InvalidOperationException("Persistence wasn't setup!!!");
         }
@@ -219,9 +187,7 @@ public class MatchMore
             createdDevice = ibeaconDevice;
         }
 
-        var resultingDevice = deviceApi.CreateDevice(createdDevice);
-
-        return resultingDevice;
+        return _deviceApi.CreateDevice(createdDevice);
     }
 
     public Subscription CreateSubscription(Device device, Subscription sub)
@@ -235,8 +201,10 @@ public class MatchMore
             throw new ArgumentException("Device Id null or empty");
         }
 
-        var createdSub = deviceApi.CreateSubscription(deviceId, sub);
-        return createdSub;
+
+        var _sub = _deviceApi.CreateSubscription(deviceId, sub);
+        _state.AddSubscription(_sub);
+        return _sub;
     }
 
     public Publication CreatePublication(Device device, Publication pub)
@@ -251,8 +219,9 @@ public class MatchMore
             throw new ArgumentException("Device Id null or empty");
         }
 
-        var createdPub = deviceApi.CreatePublication(deviceId, pub);
-        return createdPub;
+        var _pub = _deviceApi.CreatePublication(deviceId, pub);
+        _state.AddPublication(_pub);
+        return _pub;
     }
 
     public Location UpdateLocation(Device device, Location location)
@@ -270,7 +239,7 @@ public class MatchMore
         if (location.Altitude == null)
             location.Altitude = 0;
 
-        return deviceApi.CreateLocation(deviceId, location);
+        return _deviceApi.CreateLocation(deviceId, location);
     }
 
     public List<Match> GetMatches(Device device)
@@ -285,7 +254,7 @@ public class MatchMore
             throw new ArgumentException("Device Id null or empty");
         }
 
-        return deviceApi.GetMatches(deviceId);
+        return _deviceApi.GetMatches(deviceId);
     }
 
     public void SubscribeMatches(Device device, Action<List<Match>> func)
@@ -328,7 +297,7 @@ public class MatchMore
         List<Match> previous = new List<Match>();
         _ws.OnMessage += (sender, e) =>
         {
-            var match = deviceApi.GetMatch(deviceId, e.Data);
+            var match = _deviceApi.GetMatch(deviceId, e.Data);
             var existing = previous.Find(m => m.Id == match.Id);
             if (existing == null)
             {
@@ -353,7 +322,16 @@ public class MatchMore
         }
     }
 
-    ~MatchMore()
+    public List<Subscription> ActiveSubscriptions
+    {
+        get
+        {
+            return _state.ActiveSubscriptions;
+        }
+    }
+
+
+    public void CleanUp()
     {
         if (_ws != null)
         {

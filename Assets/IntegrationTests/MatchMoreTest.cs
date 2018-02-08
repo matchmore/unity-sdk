@@ -104,6 +104,70 @@ public class MatchMoreTest
         Assert.IsNotNull(match);
     }
 
+
+    [UnityTest]
+    public IEnumerator Pub_sub_persistence_and_expiration()
+    {
+        var matchMore = new MatchMore(API_KEY, ENVIRONMENT, secured: false);
+        Device device = CreateSubscribingMobileDevice(matchMore);
+
+        var sub1 = matchMore.CreateSubscription(device, new Subscription
+        {
+            Topic = "Unity",
+            Duration = 1,
+            Range = 100,
+            Selector = "test = true and price <= 200",
+            Pushers = new List<string>() { "ws" }
+        });      
+        var sub2 = matchMore.CreateSubscription(device, new Subscription
+        {
+            Topic = "Unity",
+            Duration = 5,
+            Range = 100,
+            Selector = "test = true and price <= 200",
+            Pushers = new List<string>() { "ws" }
+        });  
+
+        var persistedSub = matchMore.CreateSubscription(device, new Subscription
+        {
+            Topic = "Unity",
+            Duration = 60,
+            Range = 100,
+            Selector = "test = true and price <= 200",
+            Pushers = new List<string>() { "ws" }
+        });
+
+        var activeSubs = matchMore.ActiveSubscriptions;
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == sub1.Id));
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == sub2.Id));
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == persistedSub.Id));
+
+        yield return new WaitForSeconds(3);
+
+
+        activeSubs = matchMore.ActiveSubscriptions;
+        Assert.Null(activeSubs.Find(sub => sub.Id == sub1.Id));
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == sub2.Id));
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == persistedSub.Id));
+
+        yield return new WaitForSeconds(7);
+
+        activeSubs = matchMore.ActiveSubscriptions;
+        Assert.Null(activeSubs.Find(sub => sub.Id == sub1.Id));
+        Assert.Null(activeSubs.Find(sub => sub.Id == sub2.Id));
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == persistedSub.Id));
+
+        matchMore.CleanUp();
+
+        matchMore = new MatchMore(API_KEY, ENVIRONMENT, secured: false);
+
+        var loadedActiveSubs = matchMore.ActiveSubscriptions;
+
+        Assert.Null(activeSubs.Find(sub => sub.Id == sub1.Id));
+        Assert.Null(activeSubs.Find(sub => sub.Id == sub2.Id));
+        Assert.NotNull(activeSubs.Find(sub => sub.Id == persistedSub.Id));
+    }
+
     private static Device CreateSubscribingMobileDevice(MatchMore matchMore)
     {
         Device subDevice = matchMore.CreateDevice(new MobileDevice

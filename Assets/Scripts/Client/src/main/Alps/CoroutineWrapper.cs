@@ -30,12 +30,14 @@ public class CoroutineWrapper : MonoBehaviour
 
     private IEnumerator Run()
     {
-
-        foreach (KeyValuePair<string, Action> entry in Actions)
+        while (true)
         {
-            entry.Value();
+            foreach (KeyValuePair<string, Action> entry in Actions)
+            {
+                UnityEngine.MonoBehaviour.print("Running " + entry.Key);
+                entry.Value();
+            }
+            yield return new WaitForSeconds(1);
         }
-        yield return new WaitForSeconds(3);
-        yield return Run();
     }
 }
