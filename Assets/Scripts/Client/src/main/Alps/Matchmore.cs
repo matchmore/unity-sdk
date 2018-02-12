@@ -47,12 +47,6 @@ public class MatchMore
         }
     }
 
-
-    public class ApiKeyObject
-    {
-        public string Sub { get; set; }
-    }
-
     public MatchMore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
     {
         if (string.IsNullOrEmpty(environment))
@@ -67,7 +61,7 @@ public class MatchMore
 
         if (string.IsNullOrEmpty(worldId))
         {
-            ApiKeyObject deserializedApiKey = ExtractWorldId(apiKey);
+            var deserializedApiKey = ExtractWorldId(apiKey);
             _worldId = deserializedApiKey.Sub;
         }
         else
@@ -110,9 +104,6 @@ public class MatchMore
         var url = String.Format("{3}://{0}:9001/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol);
         _ws = new WebSocket(url, "api-key", _worldId);
 
-        //_ws.OnOpen += (sender, e) => UnityEngine.MonoBehaviour.print("On Open " + e);
-        //_ws.OnClose += (sender, e) => UnityEngine.MonoBehaviour.print("On Close " + e.Code);
-        //_ws.OnError += (sender, e) => UnityEngine.MonoBehaviour.print("On Error " + e.Message);
         _ws.OnMessage += (sender, e) =>
         {
             if (e.Data == "ping")
@@ -345,6 +336,11 @@ public class MatchMore
         {
             UnityEngine.Object.Destroy(_obj);
         }
+    }
+
+    private class ApiKeyObject
+    {
+        public string Sub { get; set; }
     }
 
     private static ApiKeyObject ExtractWorldId(string apiKey)
