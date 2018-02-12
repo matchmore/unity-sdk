@@ -155,7 +155,6 @@ public class MatchmoreTest
 
         yield return new WaitForSeconds(3);
 
-
         activeSubs = matchMore.ActiveSubscriptions;
         Assert.Null(activeSubs.Find(sub => sub.Id == sub1.Id));
         Assert.NotNull(activeSubs.Find(sub => sub.Id == sub2.Id));

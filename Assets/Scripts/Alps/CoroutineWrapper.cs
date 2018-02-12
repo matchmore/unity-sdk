@@ -12,11 +12,17 @@ using System.Linq;
 
 public class CoroutineWrapper : MonoBehaviour
 {
-    Dictionary<string, Action> Actions = new Dictionary<string, Action>();
+    private Dictionary<string, Action> _actions = new Dictionary<string, Action>();
+    private Dictionary<string, IEnumerator> _routines = new Dictionary<string, IEnumerator>();
 
     public void Setup(string id, Action action)
     {
-        Actions.Add(id, action);
+        _actions.Add(id, action);
+    }
+
+    public void RunOnce(string id, IEnumerator coroutine)
+    {
+        _routines.Add(id, coroutine);
     }
 
     private IEnumerator _rountine;
@@ -32,10 +38,24 @@ public class CoroutineWrapper : MonoBehaviour
     {
         while (true)
         {
-            foreach (KeyValuePair<string, Action> entry in Actions)
+            foreach (KeyValuePair<string, Action> entry in _actions)
             {
                 entry.Value();
             }
+
+            var toRemove = new List<string>();
+
+            foreach (KeyValuePair<string, IEnumerator> entry in _routines)
+            {
+                StartCoroutine(entry.Value);
+                toRemove.Add(entry.Key);
+            }
+
+            foreach (var key in toRemove)
+            {
+                _routines.Remove(key);
+            }
+
             yield return new WaitForSeconds(1);
         }
     }

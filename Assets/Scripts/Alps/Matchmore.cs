@@ -9,6 +9,7 @@ using WebSocketSharp;
 using System.Text;
 using Newtonsoft.Json;
 using MatchmorePersistence;
+using System.Collections;
 
 public class Matchmore
 {
@@ -47,7 +48,8 @@ public class Matchmore
         }
     }
 
-    public static void Configure(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null){
+    public static void Configure(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
+    {
         _instance = new Matchmore(apiKey, environment, secured, websocket, worldId);
     }
 
@@ -94,17 +96,73 @@ public class Matchmore
         Init();
 
         _state = new StateManager();
+        if (MainDevice == null)
+        {
+            CreateDevice(new MobileDevice(), makeMain: true);
+        }
 
         _coroutine.Setup("persistence", _state.CheckDuration);
+        _coroutine.RunOnce("location_service", StartLocationService());
 
         if (websocket)
         {
             StartWebSocket();
         }
+    }
 
-        if (Instance == null)
+    IEnumerator StartLocationService()
+    {
+        // First, check if user has location service enabled
+        if (!Input.location.isEnabledByUser)
         {
-            Instance = this;
+# if !UNITY_IOS
+            //https://docs.unity3d.com/ScriptReference/LocationService-isEnabledByUser.html
+            //if it is IOS we do not break here
+            yield break;
+#endif
+        }
+            
+
+        // Start service before querying location
+        Input.location.Start();
+
+        // Wait until service initializes
+        int maxWait = 20;
+        while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
+        {
+            yield return new WaitForSeconds(1);
+            maxWait--;
+        }
+
+        // Service didn't initialize in 20 seconds
+        if (maxWait < 1)
+        {
+            //print("Timed out");
+            yield break;
+        }
+
+        // Connection has failed
+        if (Input.location.status == LocationServiceStatus.Failed)
+        {
+            //print("Unable to determine device location");
+            yield break;
+        }
+
+        _coroutine.Setup("location_service", UpdateLocation);
+    }
+
+    private void UpdateLocation()
+    {
+        if (Input.location.status == LocationServiceStatus.Running)
+        {
+            var location = Input.location.lastData;
+
+            UpdateLocation(new Location
+            {
+                Latitude = location.latitude,
+                Longitude = location.longitude,
+                Altitude = location.altitude
+            });
         }
     }
 
@@ -173,6 +231,7 @@ public class Matchmore
             var mobileDevice = device as MobileDevice;
             mobileDevice.DeviceType = Alps.Model.DeviceType.Mobile;
 
+            mobileDevice.Name = string.IsNullOrEmpty(mobileDevice.Name) ? SystemInfo.deviceModel : mobileDevice.Name;
             mobileDevice.Platform = string.IsNullOrEmpty(mobileDevice.Platform) ? Application.platform.ToString() : mobileDevice.Platform;
             mobileDevice.DeviceToken = string.IsNullOrEmpty(mobileDevice.DeviceToken) ? "" : mobileDevice.DeviceToken;
 
