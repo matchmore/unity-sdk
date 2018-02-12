@@ -38,7 +38,7 @@ public class StateManagerTest
         });
         state = null;
         var newState = new StateManager();
-        var persistedSub = newState.ActiveSubscriptions.Find(f => f.Id == "nonsense_id");
+        var persistedSub = newState.ActiveSubscriptions.Find(s => s.Id == "nonsense_id");
         Assert.NotNull(persistedSub);
     }
 
@@ -59,7 +59,34 @@ public class StateManagerTest
         });
         state = null;
         var newState = new StateManager();
-        var persistedPub = newState.ActivePublications.Find(f => f.Id == "nonsense_id");
+        var persistedPub = newState.ActivePublications.Find(p => p.Id == "nonsense_id");
         Assert.NotNull(persistedPub);
+    }
+
+
+    [Test]
+    public void Persists_pins()
+    {
+        var pin = new PinDevice
+        {
+            Id = "nonsense_id",
+            Name = "example pin",
+            Location = new Location
+            {
+                Latitude = 10,
+                Longitude = 13
+            }
+        };
+
+        state.AddPinDevice(pin);
+        state = null;
+        var newState = new StateManager();
+        var persistedPin = newState.Pins.Find(p => p.Id == "nonsense_id");
+        Assert.AreEqual(pin.Id, persistedPin.Id);
+        Assert.AreEqual(pin.Name, persistedPin.Name);
+        Assert.AreEqual(pin.Location.Latitude, persistedPin.Location.Latitude);
+        Assert.AreEqual(pin.Location.Longitude, persistedPin.Location.Longitude);
+        Assert.AreEqual(pin.Location.Altitude, persistedPin.Location.Altitude);
+
     }
 }
