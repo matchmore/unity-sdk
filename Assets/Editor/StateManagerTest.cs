@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEngine.TestTools;
 using NUnit.Framework;
 using System.Collections;
-using Matchmore.Persistence;
+using MatchmorePersistence;
 using Alps.Model;
 using System.Collections.Generic;
 

@@ -9,7 +9,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization;
 using Newtonsoft.Json;
 
-namespace Matchmore.Persistence
+namespace MatchmorePersistence
 {
     public class StateManager
     {

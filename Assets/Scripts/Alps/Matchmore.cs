@@ -3,15 +3,14 @@ using Alps.Client;
 using Alps.Model;
 using Alps.Api;
 using System;
-using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using WebSocketSharp;
 using System.Text;
 using Newtonsoft.Json;
-using Matchmore.Persistence;
+using MatchmorePersistence;
 
-public class MatchMore
+public class Matchmore
 {
     public const string API_VERSION = "v5";
     private ApiClient _client;
@@ -48,7 +47,25 @@ public class MatchMore
         }
     }
 
-    public MatchMore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
+    public static void Configure(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null){
+        _instance = new Matchmore(apiKey, environment, secured, websocket, worldId);
+    }
+
+    private static Matchmore _instance;
+
+    public static Matchmore Instance
+    {
+        get
+        {
+            return _instance;
+        }
+        private set
+        {
+            _instance = value;
+        }
+    }
+
+    public Matchmore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
     {
         if (string.IsNullOrEmpty(environment))
         {
@@ -83,6 +100,11 @@ public class MatchMore
         if (websocket)
         {
             StartWebSocket();
+        }
+
+        if (Instance == null)
+        {
+            Instance = this;
         }
     }
 
@@ -256,9 +278,10 @@ public class MatchMore
         return _deviceApi.CreateLocation(deviceId, location);
     }
 
-    public List<Match> GetMatches(Device device)
+    public List<Match> GetMatches(Device device = null)
     {
-        return GetMatches(device.Id);
+        var usedDevice = device != null ? device : _state.Device;
+        return GetMatches(usedDevice.Id);
     }
 
     public List<Match> GetMatches(string deviceId)
