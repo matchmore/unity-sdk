@@ -13,7 +13,8 @@ using System.Collections;
 
 public class Matchmore
 {
-    public const string API_VERSION = "v5";
+    public static readonly string API_VERSION = "v5";
+    public static readonly string PRODUCTION = "https://api.matchmore.io";
     private ApiClient _client;
     private DeviceApi _deviceApi;
     private StateManager _state;
@@ -45,19 +46,43 @@ public class Matchmore
     {
         get
         {
-            var protocol = _secured ? "https" : "http";
-            var port = _servicePort == null ? "" : ":" + _servicePort;
-            return String.Format("{2}://{0}{3}/{1}", _environment, API_VERSION, protocol, port);
+            if (_environment != null)
+            {
+                var protocol = _secured ? "https" : "http";
+                var port = _servicePort == null ? "" : ":" + _servicePort;
+                return String.Format("{2}://{0}{3}/{1}", _environment, API_VERSION, protocol, port);
+            }
+            else
+                return PRODUCTION;
         }
     }
 
-    public static void Configure(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
+    /// <summary>
+    /// Configure the specified apiKey, environment, useSecuredCommunication, startWebsocketImmediately and worldId.
+    /// </summary>
+    /// <returns>The configure.</returns>
+    /// <param name="apiKey">API key received from the Matchmore portal</param>
+    /// <param name="environment">Environment, by default it will be production</param>
+    /// <param name="useSecuredCommunication">If set to <c>true</c> use secured communication.</param>
+    /// <param name="startWebsocketImmediately">If set to <c>true</c> start websocket immediately.</param>
+    /// <param name="worldId">World identifier.</param>
+    public static void Configure(string apiKey, string environment = null, bool useSecuredCommunication = true, bool startWebsocketImmediately = false, string worldId = null)
     {
         if (Instance != null)
         {
             throw new InvalidOperationException("Matchmore static instance already configured");
         }
-        Instance = new Matchmore(apiKey, environment, secured, websocket, worldId);
+        Instance = new Matchmore(apiKey, environment, useSecuredCommunication, startWebsocketImmediately, worldId);
+    }
+
+    public static void Reset()
+    {
+        if (_instance != null)
+        {
+            _instance.CleanUp();
+            _instance = null;
+
+        }
     }
 
     private static Matchmore _instance;
@@ -74,15 +99,10 @@ public class Matchmore
         }
     }
 
-    public Matchmore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null, int? servicePort = null, int? pusherPort = null)
+    public Matchmore(string apiKey, string environment = null, bool useSecuredCommunication = true, bool starWebsocketImmediately = false, string worldId = null, int? servicePort = null, int? pusherPort = null)
     {
         _servicePort = servicePort;
         _pusherPort = pusherPort;
-
-        if (string.IsNullOrEmpty(environment))
-        {
-            throw new ArgumentException("Environment null or empty");
-        }
 
         if (string.IsNullOrEmpty(apiKey))
         {
@@ -101,7 +121,7 @@ public class Matchmore
 
         _environment = environment;
         _apiKey = apiKey;
-        _secured = secured;
+        _secured = useSecuredCommunication;
 
         Init();
 
@@ -114,7 +134,7 @@ public class Matchmore
         _coroutine.Setup("persistence", _state.CheckDuration);
         _coroutine.RunOnce("location_service", StartLocationService());
 
-        if (websocket)
+        if (starWebsocketImmediately)
         {
             StartWebSocket();
         }
@@ -365,9 +385,10 @@ public class Matchmore
         return _deviceApi.GetMatches(deviceId);
     }
 
-    public void SubscribeMatches(Device device, Action<List<Match>> func)
+    public void SubscribeMatches(Action<List<Match>> func, Device device = null)
     {
-        SubscribeMatches(device.Id, func);
+        var usedDevice = device != null ? device : _state.Device;
+        SubscribeMatches(usedDevice.Id, func);
     }
 
     public void SubscribeMatches(string deviceId, Action<List<Match>> func)
@@ -388,9 +409,10 @@ public class Matchmore
         });
     }
 
-    public void SubscribeMatchesWithWS(Device device, Action<List<Match>> func)
+    public void SubscribeMatchesWithWS(Action<List<Match>> func, Device device = null)
     {
-        SubscribeMatchesWithWS(device.Id, func);
+        var usedDevice = device != null ? device : _state.Device;
+        SubscribeMatchesWithWS(usedDevice.Id, func);
     }
 
     public void SubscribeMatchesWithWS(string deviceId, Action<List<Match>> func)
@@ -447,11 +469,17 @@ public class Matchmore
         }
         if (_coroutine != null)
         {
-            UnityEngine.Object.Destroy(_coroutine);
+            if (Application.isEditor)
+                UnityEngine.Object.DestroyImmediate(_coroutine);
+            else
+                UnityEngine.Object.Destroy(_coroutine);
         }
         if (_obj != null)
         {
-            UnityEngine.Object.Destroy(_obj);
+            if (Application.isEditor)
+                UnityEngine.Object.DestroyImmediate(_obj);
+            else
+                UnityEngine.Object.Destroy(_obj);
         }
     }
 
@@ -462,9 +490,17 @@ public class Matchmore
 
     private static ApiKeyObject ExtractWorldId(string apiKey)
     {
-        var subjectData = Convert.FromBase64String(apiKey.Split('.')[1]);
-        var subject = Encoding.UTF8.GetString(subjectData);
-        var deserializedApiKey = JsonConvert.DeserializeObject<ApiKeyObject>(subject);
-        return deserializedApiKey;
+        try
+        {
+            var subjectData = Convert.FromBase64String(apiKey.Split('.')[1]);
+            var subject = Encoding.UTF8.GetString(subjectData);
+            var deserializedApiKey = JsonConvert.DeserializeObject<ApiKeyObject>(subject);
+
+            return deserializedApiKey;
+        }
+        catch (Exception e)
+        {
+            throw new ArgumentException("Api key was invalid", e);
+        }
     }
 }
