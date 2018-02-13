@@ -7,13 +7,16 @@ using System.Collections.Generic;
 
 public class MatchmoreTest
 {
-    public const string API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiZDY5MDVhYmEtNmEzOS00ZmU5LTg3NGYtNzM4ZGZlNDc1YjhkIiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTgwMDY4ODQsImlhdCI6MTUxODAwNjg4NCwianRpIjoiMSJ9.qP_tlXTeqZu-rG6ZNYuSYpbfMna6251WbwqCAh3xSYOMiXnca6WJkwEqcBytjYv3FdWtgGxt_yHXBj0uQ21vhQ";
+    public const string API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiMzU2OGRhMWMtM2YxYS00MzdiLWFiNjYtN2JlNmU4Y2IzODg2IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTg1MjEwNzMsImlhdCI6MTUxODUyMTA3MywianRpIjoiMSJ9.Jt4FtCApf5xHxwgmsT1xrZuRK53krIP886TptVn-7QRqZYpwX1RE5svrfUmn1XUcuVxWum-qwDIi_BvoVmykyg";
     public const string ENVIRONMENT = "localhost";
+    public int? servicePort = 9000;
+    public int? pusherPort = 9001;
+
 
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_poll()
     {
-        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false);
+        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false, servicePort: servicePort, pusherPort: pusherPort);
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
         Subscription sub;
         Publication pub;
@@ -40,7 +43,7 @@ public class MatchmoreTest
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_subsciption()
     {
-        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false);
+        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false, servicePort: servicePort, pusherPort: pusherPort);
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
         Subscription sub;
         Publication pub;
@@ -71,7 +74,7 @@ public class MatchmoreTest
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_web_socket()
     {
-        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false);
+        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false, servicePort: servicePort, pusherPort: pusherPort);
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
 
         matchMore.StartWebSocket(subDevice.Id);
@@ -107,7 +110,7 @@ public class MatchmoreTest
     [Test]
     public void Main_device_persistence()
     {
-        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false);
+        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false, servicePort: servicePort, pusherPort: pusherPort);
         var device = CreateMobileDevice(matchMore, makeMain: true);
         matchMore.CleanUp();
         matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false);
@@ -118,7 +121,7 @@ public class MatchmoreTest
     [UnityTest]
     public IEnumerator Pub_sub_persistence_and_expiration()
     {
-        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false);
+        var matchMore = new Matchmore(API_KEY, ENVIRONMENT, secured: false, servicePort: servicePort, pusherPort: pusherPort);
         var device = CreateMobileDevice(matchMore, makeMain: true);
 
         var sub1 = matchMore.CreateSubscription(new Subscription

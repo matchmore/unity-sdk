@@ -25,6 +25,8 @@ public class Matchmore
     private bool _secured;
     private string _worldId;
     private bool _websocketStarted = false;
+    private int? _servicePort;
+    private int? _pusherPort;
 
     public Device MainDevice
     {
@@ -44,13 +46,18 @@ public class Matchmore
         get
         {
             var protocol = _secured ? "https" : "http";
-            return String.Format("{2}://{0}:9000/{1}", _environment, API_VERSION, protocol);
+            var port = _servicePort == null ? "" : ":" + _servicePort;
+            return String.Format("{2}://{0}{3}/{1}", _environment, API_VERSION, protocol, port);
         }
     }
 
     public static void Configure(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
     {
-        _instance = new Matchmore(apiKey, environment, secured, websocket, worldId);
+        if (Instance != null)
+        {
+            throw new InvalidOperationException("Matchmore static instance already configured");
+        }
+        Instance = new Matchmore(apiKey, environment, secured, websocket, worldId);
     }
 
     private static Matchmore _instance;
@@ -67,8 +74,11 @@ public class Matchmore
         }
     }
 
-    public Matchmore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null)
+    public Matchmore(string apiKey, string environment, bool secured = true, bool websocket = false, string worldId = null, int? servicePort = null, int? pusherPort = null)
     {
+        _servicePort = servicePort;
+        _pusherPort = pusherPort;
+
         if (string.IsNullOrEmpty(environment))
         {
             throw new ArgumentException("Environment null or empty");
@@ -121,7 +131,7 @@ public class Matchmore
             yield break;
 #endif
         }
-            
+
 
         // Start service before querying location
         Input.location.Start();
@@ -180,11 +190,17 @@ public class Matchmore
         if (_websocketStarted)
             return;
 
+        UnityEngine.MonoBehaviour.print("Starting socket");
+
         var deviceId = string.IsNullOrEmpty(forDeviceId) ? _state.Device.Id : forDeviceId;
         var protocol = _secured ? "wss" : "ws";
-        var url = String.Format("{3}://{0}:9001/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol);
+        var port = _servicePort == null ? "" : ":" + _pusherPort;
+        var url = String.Format("{3}://{0}{4}/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol, port);
         _ws = new WebSocket(url, "api-key", _worldId);
 
+        _ws.OnOpen += (sender, e) => UnityEngine.MonoBehaviour.print("Opened");
+        _ws.OnClose += (sender, e) => UnityEngine.MonoBehaviour.print("Closing " + e.Code);
+        _ws.OnError += (sender, e) => UnityEngine.MonoBehaviour.print("Error " + e.Message);
         _ws.OnMessage += (sender, e) =>
         {
             if (e.Data == "ping")
@@ -204,10 +220,6 @@ public class Matchmore
         }
 
         Device createdDevice = null;
-        if (string.IsNullOrEmpty(device.Name))
-        {
-            throw new ArgumentException("Missing name");
-        }
 
         if (!string.IsNullOrEmpty(device.Id))
         {
