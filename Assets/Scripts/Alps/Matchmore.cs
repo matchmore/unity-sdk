@@ -213,7 +213,7 @@ public class Matchmore
         if (_websocketStarted)
             return;
 
-        UnityEngine.MonoBehaviour.print("Starting socket");
+        UnityEngine.Debug.Log("Starting websocket");
 
         var deviceId = string.IsNullOrEmpty(forDeviceId) ? _state.Device.Id : forDeviceId;
         var protocol = _secured ? "wss" : "ws";
@@ -221,9 +221,9 @@ public class Matchmore
         var url = String.Format("{3}://{0}{4}/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol, port);
         _ws = new WebSocket(url, "api-key", _worldId);
 
-        _ws.OnOpen += (sender, e) => UnityEngine.MonoBehaviour.print("Opened");
-        _ws.OnClose += (sender, e) => UnityEngine.MonoBehaviour.print("Closing " + e.Code);
-        _ws.OnError += (sender, e) => UnityEngine.MonoBehaviour.print("Error " + e.Message);
+        _ws.OnOpen += (sender, e) => UnityEngine.Debug.Log("WS opened");
+        _ws.OnClose += (sender, e) => UnityEngine.Debug.Log("WS closing " + e.Code);
+        _ws.OnError += (sender, e) => UnityEngine.Debug.Log("Error in WS " + e.Message);
         _ws.OnMessage += (sender, e) =>
         {
             if (e.Data == "ping")
