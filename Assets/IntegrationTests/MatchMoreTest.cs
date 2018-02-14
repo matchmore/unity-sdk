@@ -87,7 +87,7 @@ public class MatchmoreTest
 
         Match match = null;
 
-        matchMore.SubscribeMatchesWithWS(matches =>
+        matchMore.SubscribeMatchesWithWS(   matches =>
         {
             match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
         });

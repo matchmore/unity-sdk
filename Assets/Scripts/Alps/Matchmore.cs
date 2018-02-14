@@ -14,7 +14,7 @@ using System.Collections;
 public class Matchmore
 {
     public static readonly string API_VERSION = "v5";
-    public static readonly string PRODUCTION = "https://api.matchmore.io";
+    public static readonly string PRODUCTION = "api.matchmore.io";
     private ApiClient _client;
     private DeviceApi _deviceApi;
     private StateManager _state;
@@ -52,8 +52,11 @@ public class Matchmore
                 var port = _servicePort == null ? "" : ":" + _servicePort;
                 return String.Format("{2}://{0}{3}/{1}", _environment, API_VERSION, protocol, port);
             }
-            else
-                return PRODUCTION;
+            else{
+                var protocol = _secured ? "https" : "http";
+                return String.Format("{0}://{1}/{2}", protocol, PRODUCTION, API_VERSION);
+            }
+                
         }
     }
 
@@ -201,7 +204,7 @@ public class Matchmore
         _client = new ApiClient(ApiUrl);
         _client.AddDefaultHeader("api-key", _apiKey);
         _deviceApi = new DeviceApi(_client);
-        _obj = new GameObject("MatchMoreObject_" + UnityEngine.Random.Range(0, 100));
+        _obj = new GameObject("MatchMoreObject");
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
     }
 
@@ -332,13 +335,13 @@ public class Matchmore
         return _sub;
     }
 
-    public Publication CreatePublication(Publication pub, Device device)
+    public Publication CreatePublication(Publication pub, Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
         return CreatePublication(pub, usedDevice.Id);
     }
 
-    public Publication CreatePublication(Publication pub, string deviceId = null)
+    public Publication CreatePublication(Publication pub, string deviceId)
     {
         if (string.IsNullOrEmpty(deviceId))
         {

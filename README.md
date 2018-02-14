@@ -59,11 +59,8 @@ The `Matchmore` is a static wrapper that provides you all the functions you need
 
     	});
 
-   //similar api is available for websocket connections
-   Matchmore.Instance.SubscribeMatchesWithWS(HandleMatches);
-
-
-
+    //similar api is available for websocket connections
+    Matchmore.Instance.SubscribeMatchesWithWS(HandleMatches);
 
 ```
 

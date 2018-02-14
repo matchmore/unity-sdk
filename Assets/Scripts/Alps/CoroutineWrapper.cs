@@ -17,11 +17,15 @@ public class CoroutineWrapper : MonoBehaviour
 
     public void Setup(string id, Action action)
     {
+        if (_actions.ContainsKey(id))
+            _actions.Remove(id);
         _actions.Add(id, action);
     }
 
     public void RunOnce(string id, IEnumerator coroutine)
     {
+        if (_routines.ContainsKey(id))
+            _routines.Remove(id);
         _routines.Add(id, coroutine);
     }
 
