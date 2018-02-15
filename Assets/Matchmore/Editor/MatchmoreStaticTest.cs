@@ -12,7 +12,8 @@ public class MatchmoreStaticTest
 {
 
     [TearDown]
-    public void Reset(){
+    public void Reset()
+    {
         Matchmore.Reset();
     }
 
@@ -22,7 +23,7 @@ public class MatchmoreStaticTest
         string API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiMzU2OGRhMWMtM2YxYS00MzdiLWFiNjYtN2JlNmU4Y2IzODg2IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTg1MjEwNzMsImlhdCI6MTUxODUyMTA3MywianRpIjoiMSJ9.Jt4FtCApf5xHxwgmsT1xrZuRK53krIP886TptVn-7QRqZYpwX1RE5svrfUmn1XUcuVxWum-qwDIi_BvoVmykyg";
         Matchmore.Configure(API_KEY);
         Assert.NotNull(Matchmore.Instance);
-        Assert.AreEqual(Matchmore.PRODUCTION, Matchmore.Instance.ApiUrl);
+        Assert.AreEqual("https://" + Matchmore.PRODUCTION + "/v5", Matchmore.Instance.ApiUrl);
     }
 
     [Test]
