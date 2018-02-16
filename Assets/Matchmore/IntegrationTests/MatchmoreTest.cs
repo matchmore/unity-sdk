@@ -77,8 +77,11 @@ public class MatchmoreTest
         var matchMore = new Matchmore(API_KEY, ENVIRONMENT, useSecuredCommunication: false, servicePort: servicePort, pusherPort: pusherPort);
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
 
-        matchMore.StartWebSocket(subDevice.Id);
-        yield return new WaitForSeconds(3);
+        var matches = new List<Match>();
+        matchMore.SubscribeMatchesWithWS(_matches =>
+        {
+            matches = _matches;
+        });
 
         Subscription sub;
         Publication pub;
@@ -86,14 +89,9 @@ public class MatchmoreTest
 
 
         Match match = null;
-
-        matchMore.SubscribeMatchesWithWS(   matches =>
-        {
-            match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
-        });
-
         for (int i = 10 - 1; i >= 0; i--)
         {
+            match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
             if (match != null)
             {
                 break;

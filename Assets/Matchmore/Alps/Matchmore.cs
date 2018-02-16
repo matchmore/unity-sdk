@@ -20,14 +20,21 @@ public class Matchmore
     private StateManager _state;
     private GameObject _obj;
     private CoroutineWrapper _coroutine;
-    private WebSocket _ws;
     private string _environment;
     private string _apiKey;
     private bool _secured;
     private string _worldId;
-    private bool _websocketStarted = false;
     private int? _servicePort;
     private int? _pusherPort;
+    private Dictionary<string, MatchMonitor> _monitors = new Dictionary<string, MatchMonitor>();
+
+    public Dictionary<string, MatchMonitor> Monitors
+    {
+        get
+        {
+            return _monitors;
+        }
+    }
 
     public Device MainDevice
     {
@@ -52,11 +59,12 @@ public class Matchmore
                 var port = _servicePort == null ? "" : ":" + _servicePort;
                 return String.Format("{2}://{0}{3}/{1}", _environment, API_VERSION, protocol, port);
             }
-            else{
+            else
+            {
                 var protocol = _secured ? "https" : "http";
                 return String.Format("{0}://{1}/{2}", protocol, PRODUCTION, API_VERSION);
             }
-                
+
         }
     }
 
@@ -114,8 +122,8 @@ public class Matchmore
 
         if (string.IsNullOrEmpty(worldId))
         {
-            var deserializedApiKey = ExtractWorldId(apiKey);
-            _worldId = deserializedApiKey.Sub;
+            var deserializedApiKey = Utils.ExtractWorldId(apiKey);
+            _worldId = deserializedApiKey;
         }
         else
         {
@@ -134,13 +142,8 @@ public class Matchmore
             CreateDevice(new MobileDevice(), makeMain: true);
         }
 
-        _coroutine.Setup("persistence", _state.CheckDuration);
+        _coroutine.SetupContinuousRoutine("persistence", _state.CheckDuration);
         _coroutine.RunOnce("location_service", StartLocationService());
-
-        if (starWebsocketImmediately)
-        {
-            StartWebSocket();
-        }
     }
 
     IEnumerator StartLocationService()
@@ -181,7 +184,7 @@ public class Matchmore
             yield break;
         }
 
-        _coroutine.Setup("location_service", UpdateLocation);
+        _coroutine.SetupContinuousRoutine("location_service", UpdateLocation);
     }
 
     private void UpdateLocation()
@@ -206,33 +209,6 @@ public class Matchmore
         _deviceApi = new DeviceApi(_client);
         _obj = new GameObject("MatchMoreObject");
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
-    }
-
-    public void StartWebSocket(string forDeviceId = null)
-    {
-        if (_websocketStarted)
-            return;
-
-        UnityEngine.Debug.Log("Starting websocket");
-
-        var deviceId = string.IsNullOrEmpty(forDeviceId) ? _state.Device.Id : forDeviceId;
-        var protocol = _secured ? "wss" : "ws";
-        var port = _servicePort == null ? "" : ":" + _pusherPort;
-        var url = String.Format("{3}://{0}{4}/pusher/{1}/ws/{2}", _environment, API_VERSION, deviceId, protocol, port);
-        _ws = new WebSocket(url, "api-key", _worldId);
-
-        _ws.OnOpen += (sender, e) => UnityEngine.Debug.Log("WS opened");
-        _ws.OnClose += (sender, e) => UnityEngine.Debug.Log("WS closing " + e.Code);
-        _ws.OnError += (sender, e) => UnityEngine.Debug.Log("Error in WS " + e.Message);
-        _ws.OnMessage += (sender, e) =>
-        {
-            if (e.Data == "ping")
-            {
-                _ws.Send("pong");
-            }
-        };
-        _ws.Connect();
-        _websocketStarted = true;
     }
 
     public Device CreateDevice(Device device, bool makeMain = false)
@@ -314,7 +290,16 @@ public class Matchmore
 
         var createdDevice = (PinDevice)_deviceApi.CreateDevice(pinDevice);
         _state.AddPinDevice(createdDevice);
+  
         return createdDevice;
+    }
+
+    public Tuple<PinDevice, MatchMonitor> CreatePinDeviceAndStartListening(PinDevice pinDevice, Action<List<Match>> onMatchCallback)
+    {
+        var createdDevice = CreatePinDevice(pinDevice);
+        var monitor = SubscribeMatchesWithWS(onMatchCallback, createdDevice);
+
+        return Tuple.New(createdDevice, monitor);
     }
 
     public Subscription CreateSubscription(Subscription sub, Device device = null)
@@ -388,13 +373,13 @@ public class Matchmore
         return _deviceApi.GetMatches(deviceId);
     }
 
-    public void SubscribeMatches(Action<List<Match>> func, Device device = null)
+    public MatchMonitor SubscribeMatches(Action<List<Match>> onMatchCallback, Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
-        SubscribeMatches(usedDevice.Id, func);
+        return SubscribeMatches(usedDevice.Id, onMatchCallback);
     }
 
-    public void SubscribeMatches(string deviceId, Action<List<Match>> func)
+    public MatchMonitor SubscribeMatches(string deviceId, Action<List<Match>> onMatchCallback)
     {
         if (string.IsNullOrEmpty(deviceId))
         {
@@ -402,57 +387,44 @@ public class Matchmore
         }
 
         List<Match> previous = new List<Match>();
+        var monitor = CreateMonitor(deviceId, null);
+        _monitors.Add(deviceId, monitor);
 
-        _coroutine.Setup(deviceId, () =>
+        _coroutine.SetupContinuousRoutine(deviceId, () =>
         {
             var m = GetMatches(deviceId);
             var matches = m.Except(previous, new MatchComparer()).ToList();
-            func(matches);
+            onMatchCallback(matches);
             previous = matches;
         });
+
+        return monitor;
     }
 
-    public void SubscribeMatchesWithWS(Action<List<Match>> func, Device device = null)
+    public MatchMonitor SubscribeMatchesWithWS(Action<List<Match>> onMatchCallback, Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
-        SubscribeMatchesWithWS(usedDevice.Id, func);
+        return SubscribeMatchesWithWS(usedDevice.Id, onMatchCallback);
     }
 
-    public void SubscribeMatchesWithWS(string deviceId, Action<List<Match>> func)
+    public MatchMonitor SubscribeMatchesWithWS(string deviceId, Action<List<Match>> onMatchCallback)
     {
         if (string.IsNullOrEmpty(deviceId))
         {
             throw new ArgumentException("Device Id null or empty");
         }
 
-        StartWebSocket(deviceId);
-
-        List<Match> previous = new List<Match>();
-        _ws.OnMessage += (sender, e) =>
+        if (_monitors.ContainsKey(deviceId))
         {
-            var match = _deviceApi.GetMatch(deviceId, e.Data);
-            var existing = previous.Find(m => m.Id == match.Id);
-            if (existing == null)
-            {
-                func(new List<Match> { match });
-            }
-
-            previous = previous.Concat(new List<Match> { match }).ToList();
-
-        };
-    }
-
-    private class MatchComparer : IEqualityComparer<Match>
-    {
-        public bool Equals(Match x, Match y)
-        {
-            return x.Id == y.Id;
+            _monitors[deviceId].RefreshSocket(CreateWebsocket(deviceId, onMatchCallback));
         }
-
-        public int GetHashCode(Match obj)
+        else
         {
-            return obj.GetHashCode();
+            
+            var monitor = CreateMonitor(deviceId, CreateWebsocket(deviceId, onMatchCallback));
+            _monitors.Add(deviceId, monitor);
         }
+        return _monitors[deviceId];
     }
 
     public List<Subscription> ActiveSubscriptions
@@ -463,13 +435,23 @@ public class Matchmore
         }
     }
 
+    public List<Publication> ActivePublications
+    {
+        get{
+            return _state.ActivePublications;
+        }
+    }
 
     public void CleanUp()
     {
-        if (_ws != null)
+        foreach (var monitor in _monitors)
         {
-            _ws.Close();
+            monitor.Value.Stop();
         }
+
+        _monitors.Clear();
+        _monitors = null;
+
         if (_coroutine != null)
         {
             if (Application.isEditor)
@@ -486,24 +468,40 @@ public class Matchmore
         }
     }
 
-    private class ApiKeyObject
+    private class MatchComparer : IEqualityComparer<Match>
     {
-        public string Sub { get; set; }
+        public bool Equals(Match x, Match y)
+        {
+            return x.Id == y.Id;
+        }
+
+        public int GetHashCode(Match obj)
+        {
+            return obj.GetHashCode();
+        }
     }
 
-    private static ApiKeyObject ExtractWorldId(string apiKey)
-    {
-        try
-        {
-            var subjectData = Convert.FromBase64String(apiKey.Split('.')[1]);
-            var subject = Encoding.UTF8.GetString(subjectData);
-            var deserializedApiKey = JsonConvert.DeserializeObject<ApiKeyObject>(subject);
 
-            return deserializedApiKey;
-        }
-        catch (Exception e)
+    private WebsocketWrapper CreateWebsocket(string deviceId, Action<List<Match>> onMatchCallback)
+    {
+        List<Match> previous = new List<Match>();
+        Action<string> onMatchSocketCallback = matchId =>
         {
-            throw new ArgumentException("Api key was invalid", e);
-        }
+            var match = _deviceApi.GetMatch(deviceId, matchId);
+            var existing = previous.Find(m => m.Id == match.Id);
+            if (existing == null)
+            {
+                onMatchCallback(new List<Match> { match });
+            }
+
+            previous = previous.Concat(new List<Match> { match }).ToList();
+
+        };
+        return new WebsocketWrapper(deviceId, _environment, _apiKey, _secured, _pusherPort, onMatchSocketCallback);
+    }
+
+    private MatchMonitor CreateMonitor(string deviceId, WebsocketWrapper ws)
+    {
+        return new MatchMonitor(deviceId, id => _monitors.Remove(id), ws);
     }
 }

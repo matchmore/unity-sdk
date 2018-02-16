@@ -12,14 +12,21 @@ using System.Linq;
 
 public class CoroutineWrapper : MonoBehaviour
 {
+
+
     private Dictionary<string, Action> _actions = new Dictionary<string, Action>();
     private Dictionary<string, IEnumerator> _routines = new Dictionary<string, IEnumerator>();
+    private List<string> _toDeleteActions = new List<string>();
 
-    public void Setup(string id, Action action)
+    public void SetupContinuousRoutine(string id, Action action)
     {
         if (_actions.ContainsKey(id))
             _actions.Remove(id);
         _actions.Add(id, action);
+    }
+
+    private void StopAction(string id){
+        _toDeleteActions.Add(id);
     }
 
     public void RunOnce(string id, IEnumerator coroutine)
@@ -42,25 +49,41 @@ public class CoroutineWrapper : MonoBehaviour
     {
         while (true)
         {
-            foreach (KeyValuePair<string, Action> entry in _actions)
-            {
-                entry.Value();
-            }
-
-            var toRemove = new List<string>();
-
-            foreach (KeyValuePair<string, IEnumerator> entry in _routines)
-            {
-                StartCoroutine(entry.Value);
-                toRemove.Add(entry.Key);
-            }
-
-            foreach (var key in toRemove)
-            {
-                _routines.Remove(key);
-            }
+            ProcessActions();
+            ProcessOneTimeRoutines();
 
             yield return new WaitForSeconds(1);
+        }
+    }
+
+    private void ProcessOneTimeRoutines()
+    {
+        var toDeleteRoutines = new List<string>();
+
+        foreach (KeyValuePair<string, IEnumerator> entry in _routines)
+        {
+            StartCoroutine(entry.Value);
+            toDeleteRoutines.Add(entry.Key);
+        }
+
+        _toDeleteActions = new List<string>();
+
+        foreach (var key in toDeleteRoutines)
+        {
+            _routines.Remove(key);
+        }
+    }
+
+    private void ProcessActions()
+    {
+        foreach (KeyValuePair<string, Action> entry in _actions)
+        {
+            entry.Value();
+        }
+
+        foreach (var key in _toDeleteActions)
+        {
+            _actions.Remove(key);
         }
     }
 }
