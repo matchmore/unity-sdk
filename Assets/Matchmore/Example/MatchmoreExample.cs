@@ -48,18 +48,18 @@ public class MatchmoreExample : MonoBehaviour
             logText.text += "\n Got Match " + m.Id + " single call";
         });
 
-        Matchmore.Instance.SubscribeMatches(HandleMatches);
+        Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.Websocket);
 
-        //or using a lambda
-        Matchmore.Instance.SubscribeMatches(_matches =>
-        {
-            matches.ForEach(m => {
-                logText.text += "\n Got Match " + m.Id + " from polling with lambda";
-            });
-        });
+        ////or using a lambda
+        //Matchmore.Instance.SubscribeMatches(_matches =>
+        //{
+        //    matches.ForEach(m => {
+        //        logText.text += "\n Got Match " + m.Id + " from polling with lambda";
+        //    });
+        //});
 
-        //similar api is available for websocket connections
-        Matchmore.Instance.SubscribeMatchesWithWS(HandleMatches);
+        ////similar api is available for websocket connections
+        //Matchmore.Instance.SubscribeMatchesWithWS(HandleMatches);
     }
 
     //create a delegate which will fire on matches, using polling

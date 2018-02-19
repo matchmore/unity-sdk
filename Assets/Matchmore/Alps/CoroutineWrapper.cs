@@ -25,7 +25,7 @@ public class CoroutineWrapper : MonoBehaviour
         _actions.Add(id, action);
     }
 
-    private void StopAction(string id){
+    public void StopContinuousRoutine(string id){
         _toDeleteActions.Add(id);
     }
 

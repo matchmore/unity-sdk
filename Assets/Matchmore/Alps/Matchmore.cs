@@ -4,10 +4,6 @@ using Alps.Model;
 using Alps.Api;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using WebSocketSharp;
-using System.Text;
-using Newtonsoft.Json;
 using MatchmorePersistence;
 using System.Collections;
 
@@ -26,9 +22,16 @@ public class Matchmore
     private string _worldId;
     private int? _servicePort;
     private int? _pusherPort;
-    private Dictionary<string, MatchMonitor> _monitors = new Dictionary<string, MatchMonitor>();
+    private Dictionary<string, IMatchMonitor> _monitors = new Dictionary<string, IMatchMonitor>();
 
-    public Dictionary<string, MatchMonitor> Monitors
+    [Flags]
+    public enum MatchChannel
+    {
+        Polling = 0,
+        Websocket = 1
+    }
+
+    public Dictionary<string, IMatchMonitor> Monitors
     {
         get
         {
@@ -290,14 +293,14 @@ public class Matchmore
 
         var createdDevice = (PinDevice)_deviceApi.CreateDevice(pinDevice);
         _state.AddPinDevice(createdDevice);
-  
+
         return createdDevice;
     }
 
-    public Tuple<PinDevice, MatchMonitor> CreatePinDeviceAndStartListening(PinDevice pinDevice, Action<List<Match>> onMatchCallback)
+    public Tuple<PinDevice, IMatchMonitor> CreatePinDeviceAndStartListening(PinDevice pinDevice, MatchChannel channel)
     {
         var createdDevice = CreatePinDevice(pinDevice);
-        var monitor = SubscribeMatchesWithWS(onMatchCallback, createdDevice);
+        var monitor = SubscribeMatches(channel, createdDevice);
 
         return Tuple.New(createdDevice, monitor);
     }
@@ -373,58 +376,52 @@ public class Matchmore
         return _deviceApi.GetMatches(deviceId);
     }
 
-    public MatchMonitor SubscribeMatches(Action<List<Match>> onMatchCallback, Device device = null)
+    public IMatchMonitor SubscribeMatches(MatchChannel channel, Device device = null)
     {
-        var usedDevice = device != null ? device : _state.Device;
-        return SubscribeMatches(usedDevice.Id, onMatchCallback);
+        var deviceToSubscribe = device == null ? _state.Device : device;
+        switch (channel)
+        {
+            case MatchChannel.Polling:
+                return SetupPollingMonitor(deviceToSubscribe);
+            case MatchChannel.Websocket:
+                return SetupWebsocketMonitor(deviceToSubscribe);
+            default:
+                return null;
+        }
     }
 
-    public MatchMonitor SubscribeMatches(string deviceId, Action<List<Match>> onMatchCallback)
+    private IMatchMonitor SetupPollingMonitor(Device device)
     {
-        if (string.IsNullOrEmpty(deviceId))
-        {
-            throw new ArgumentException("Device Id null or empty");
-        }
-
-        List<Match> previous = new List<Match>();
-        var monitor = CreateMonitor(deviceId, null);
-        _monitors.Add(deviceId, monitor);
-
-        _coroutine.SetupContinuousRoutine(deviceId, () =>
-        {
-            var m = GetMatches(deviceId);
-            var matches = m.Except(previous, new MatchComparer()).ToList();
-            onMatchCallback(matches);
-            previous = matches;
-        });
+        var monitor = CreatePollingMonitor(device);
+        _monitors.Add(device.Id, monitor);
 
         return monitor;
     }
 
-    public MatchMonitor SubscribeMatchesWithWS(Action<List<Match>> onMatchCallback, Device device = null)
+    private IMatchMonitor SetupWebsocketMonitor(Device device)
     {
-        var usedDevice = device != null ? device : _state.Device;
-        return SubscribeMatchesWithWS(usedDevice.Id, onMatchCallback);
+        var monitor = CreateWebsocketMonitor(device);
+        _monitors.Add(device.Id, monitor);
+
+        return monitor;
     }
 
-    public MatchMonitor SubscribeMatchesWithWS(string deviceId, Action<List<Match>> onMatchCallback)
+    public IMatchMonitor SubscribeMatches(MatchChannel channel, string deviceId)
     {
         if (string.IsNullOrEmpty(deviceId))
         {
             throw new ArgumentException("Device Id null or empty");
         }
 
-        if (_monitors.ContainsKey(deviceId))
-        {
-            _monitors[deviceId].RefreshSocket(CreateWebsocket(deviceId, onMatchCallback));
-        }
+        return SubscribeMatches(channel, FindDevice(deviceId));
+    }
+
+    private Device FindDevice(string deviceId)
+    {
+        if (_state.Device.Id == deviceId)
+            return _state.Device;
         else
-        {
-            
-            var monitor = CreateMonitor(deviceId, CreateWebsocket(deviceId, onMatchCallback));
-            _monitors.Add(deviceId, monitor);
-        }
-        return _monitors[deviceId];
+            return _state.Pins.Find(pin => pin.Id == deviceId);
     }
 
     public List<Subscription> ActiveSubscriptions
@@ -437,7 +434,8 @@ public class Matchmore
 
     public List<Publication> ActivePublications
     {
-        get{
+        get
+        {
             return _state.ActivePublications;
         }
     }
@@ -481,27 +479,13 @@ public class Matchmore
         }
     }
 
-
-    private WebsocketWrapper CreateWebsocket(string deviceId, Action<List<Match>> onMatchCallback)
+    private PollingMatchMonitor CreatePollingMonitor(Device device)
     {
-        List<Match> previous = new List<Match>();
-        Action<string> onMatchSocketCallback = matchId =>
-        {
-            var match = _deviceApi.GetMatch(deviceId, matchId);
-            var existing = previous.Find(m => m.Id == match.Id);
-            if (existing == null)
-            {
-                onMatchCallback(new List<Match> { match });
-            }
-
-            previous = previous.Concat(new List<Match> { match }).ToList();
-
-        };
-        return new WebsocketWrapper(deviceId, _environment, _apiKey, _secured, _pusherPort, onMatchSocketCallback);
+        return new PollingMatchMonitor(device, _deviceApi, _coroutine, id => _monitors.Remove(id));
     }
 
-    private MatchMonitor CreateMonitor(string deviceId, WebsocketWrapper ws)
+    private WebsocketMatchMonitor CreateWebsocketMonitor(Device device)
     {
-        return new MatchMonitor(deviceId, id => _monitors.Remove(id), ws);
+        return new WebsocketMatchMonitor(device, _environment, _apiKey, _secured, _pusherPort, _deviceApi, _coroutine, id => _monitors.Remove(id));
     }
 }

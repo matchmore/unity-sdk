@@ -12,7 +12,6 @@ public class MatchmoreTest
     public int? servicePort = 9000;
     public int? pusherPort = 9001;
 
-
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_poll()
     {
@@ -41,7 +40,7 @@ public class MatchmoreTest
     }
 
     [UnityTest]
-    public IEnumerator Add_device_pub_sub_and_get_match_via_subsciption()
+    public IEnumerator Add_device_pub_sub_and_get_match_via_polling_event()
     {
         var matchMore = new Matchmore(API_KEY, ENVIRONMENT, useSecuredCommunication: false, servicePort: servicePort, pusherPort: pusherPort);
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
@@ -51,10 +50,16 @@ public class MatchmoreTest
 
         Match match = null;
 
-        matchMore.SubscribeMatches(matches =>
-        {
-            match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
-        });
+        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.Polling);
+        monitor.MatchReceived += (sender, e) => {
+            match = e.Matches[0];
+        };
+
+
+        //matchMore.SubscribeMatches(Matchmore.MatchChannel.Polling, matches =>
+        //{
+        //    match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
+        //});
 
         for (int i = 10 - 1; i >= 0; i--)
         {
@@ -78,10 +83,11 @@ public class MatchmoreTest
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
 
         var matches = new List<Match>();
-        matchMore.SubscribeMatchesWithWS(_matches =>
-        {
-            matches = _matches;
-        });
+        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.Websocket);
+
+        monitor.MatchReceived += (sender, e) => {
+            matches = e.Matches;
+        };
 
         Subscription sub;
         Publication pub;
