@@ -1,8 +1,4 @@
-﻿using UnityEngine;
-using UnityEditor;
-using UnityEngine.TestTools;
-using NUnit.Framework;
-using System.Collections;
+﻿using NUnit.Framework;
 using MatchmorePersistence;
 using Alps.Model;
 using System.Collections.Generic;
@@ -10,11 +6,12 @@ using System.Collections.Generic;
 public class StateManagerTest
 {
     private StateManager state;
+    private string localhost = "localhost";
 
     [SetUp]
     public void Init()
     {
-        state = new StateManager();
+        state = new StateManager(localhost);
     }
 
     [TearDown]
@@ -37,7 +34,7 @@ public class StateManagerTest
             Selector = "test = true and price <= 200"
         });
         state = null;
-        var newState = new StateManager();
+        var newState = new StateManager(localhost);
         var persistedSub = newState.ActiveSubscriptions.Find(s => s.Id == "nonsense_id");
         Assert.NotNull(persistedSub);
     }
@@ -58,7 +55,7 @@ public class StateManagerTest
             }
         });
         state = null;
-        var newState = new StateManager();
+        var newState = new StateManager(localhost);
         var persistedPub = newState.ActivePublications.Find(p => p.Id == "nonsense_id");
         Assert.NotNull(persistedPub);
     }
@@ -80,13 +77,12 @@ public class StateManagerTest
 
         state.AddPinDevice(pin);
         state = null;
-        var newState = new StateManager();
+        var newState = new StateManager(localhost);
         var persistedPin = newState.Pins.Find(p => p.Id == "nonsense_id");
         Assert.AreEqual(pin.Id, persistedPin.Id);
         Assert.AreEqual(pin.Name, persistedPin.Name);
         Assert.AreEqual(pin.Location.Latitude, persistedPin.Location.Latitude);
         Assert.AreEqual(pin.Location.Longitude, persistedPin.Location.Longitude);
         Assert.AreEqual(pin.Location.Altitude, persistedPin.Location.Altitude);
-
     }
 }

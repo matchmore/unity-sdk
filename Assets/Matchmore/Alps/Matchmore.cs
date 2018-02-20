@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using MatchmorePersistence;
 using System.Collections;
+using System.Collections.ObjectModel;
 
 public class Matchmore
 {
@@ -23,6 +24,27 @@ public class Matchmore
     private int? _servicePort;
     private int? _pusherPort;
     private Dictionary<string, IMatchMonitor> _monitors = new Dictionary<string, IMatchMonitor>();
+    private List<EventHandler<MatchReceivedEventArgs>> _eventHandlers = new List<EventHandler<MatchReceivedEventArgs>>();
+
+    public event EventHandler<MatchReceivedEventArgs> MatchReceived
+    {
+        add
+        {
+            foreach (var monitor in _monitors)
+            {
+                _eventHandlers.Add(value);
+                monitor.Value.MatchReceived += value;
+            }
+        }
+        remove
+        {
+            foreach (var monitor in _monitors)
+            {
+                _eventHandlers.Remove(value);
+                monitor.Value.MatchReceived -= value;
+            }
+        }
+    }
 
     [Flags]
     public enum MatchChannel
@@ -113,11 +135,8 @@ public class Matchmore
         }
     }
 
-    public Matchmore(string apiKey, string environment = null, bool useSecuredCommunication = true, bool starWebsocketImmediately = false, string worldId = null, int? servicePort = null, int? pusherPort = null)
+    public Matchmore(string apiKey, string environment = null, bool useSecuredCommunication = true, bool starWebsocketImmediately = false, string worldId = null, int? servicePort = null, int? pusherPort = null, string persistenceFile = null)
     {
-        _servicePort = servicePort;
-        _pusherPort = pusherPort;
-
         if (string.IsNullOrEmpty(apiKey))
         {
             throw new ArgumentException("Api key null or empty");
@@ -133,23 +152,36 @@ public class Matchmore
             _worldId = worldId;
         }
 
-        _environment = environment;
+        _servicePort = servicePort;
+        _pusherPort = pusherPort;
+        _environment = environment ?? PRODUCTION;
         _apiKey = apiKey;
         _secured = useSecuredCommunication;
 
-        Init();
+        InitGameObjects();
 
-        _state = new StateManager();
+        _state = new StateManager(_environment, persistenceFile);
+
         if (MainDevice == null)
         {
             CreateDevice(new MobileDevice(), makeMain: true);
         }
 
-        _coroutine.SetupContinuousRoutine("persistence", _state.CheckDuration);
-        _coroutine.RunOnce("location_service", StartLocationService());
+        _coroutine.SetupContinuousRoutine("persistence", _state.PruneDead);
+        StartLocationService();
     }
 
-    IEnumerator StartLocationService()
+    public void StartLocationService()
+    {
+        _coroutine.RunOnce("location_service", StartLocationServiceCoroutine());
+    }
+
+    public void WipeData()
+    {
+        _state.WipeData();
+    }
+
+    IEnumerator StartLocationServiceCoroutine()
     {
         // First, check if user has location service enabled
         if (!Input.location.isEnabledByUser)
@@ -205,7 +237,7 @@ public class Matchmore
         }
     }
 
-    private void Init()
+    private void InitGameObjects()
     {
         _client = new ApiClient(ApiUrl);
         _client.AddDefaultHeader("api-key", _apiKey);
@@ -376,36 +408,6 @@ public class Matchmore
         return _deviceApi.GetMatches(deviceId);
     }
 
-    public IMatchMonitor SubscribeMatches(MatchChannel channel, Device device = null)
-    {
-        var deviceToSubscribe = device == null ? _state.Device : device;
-        switch (channel)
-        {
-            case MatchChannel.Polling:
-                return SetupPollingMonitor(deviceToSubscribe);
-            case MatchChannel.Websocket:
-                return SetupWebsocketMonitor(deviceToSubscribe);
-            default:
-                return null;
-        }
-    }
-
-    private IMatchMonitor SetupPollingMonitor(Device device)
-    {
-        var monitor = CreatePollingMonitor(device);
-        _monitors.Add(device.Id, monitor);
-
-        return monitor;
-    }
-
-    private IMatchMonitor SetupWebsocketMonitor(Device device)
-    {
-        var monitor = CreateWebsocketMonitor(device);
-        _monitors.Add(device.Id, monitor);
-
-        return monitor;
-    }
-
     public IMatchMonitor SubscribeMatches(MatchChannel channel, string deviceId)
     {
         if (string.IsNullOrEmpty(deviceId))
@@ -416,6 +418,43 @@ public class Matchmore
         return SubscribeMatches(channel, FindDevice(deviceId));
     }
 
+    public IMatchMonitor SubscribeMatches(MatchChannel channel, Device device = null)
+    {
+        var deviceToSubscribe = device == null ? _state.Device : device;
+        IMatchMonitor monitor = null;
+        switch (channel)
+        {
+            case MatchChannel.Polling:
+                monitor = CreatePollingMonitor(deviceToSubscribe);
+                break;
+            case MatchChannel.Websocket:
+                monitor = CreateWebsocketMonitor(deviceToSubscribe);
+                break;
+            default:
+                break;
+        }
+
+        if (monitor == null)
+        {
+            throw new ArgumentException(String.Format("{0} is an unrecognized channel", channel));
+        }
+
+        if (_monitors.ContainsKey(deviceToSubscribe.Id))
+        {
+            _monitors[deviceToSubscribe.Id].Stop();
+            _monitors.Remove(deviceToSubscribe.Id);
+        }
+
+        foreach (var handler in _eventHandlers)
+        {
+            monitor.MatchReceived += handler;
+        }
+
+        _monitors.Add(deviceToSubscribe.Id, monitor);
+
+        return monitor;
+    }
+
     private Device FindDevice(string deviceId)
     {
         if (_state.Device.Id == deviceId)
@@ -424,19 +463,19 @@ public class Matchmore
             return _state.Pins.Find(pin => pin.Id == deviceId);
     }
 
-    public List<Subscription> ActiveSubscriptions
+    public IEnumerable<Subscription> ActiveSubscriptions
     {
         get
         {
-            return _state.ActiveSubscriptions;
+            return _state.ActiveSubscriptions.AsReadOnly();
         }
     }
 
-    public List<Publication> ActivePublications
+    public IEnumerable<Publication> ActivePublications
     {
         get
         {
-            return _state.ActivePublications;
+            return _state.ActivePublications.AsReadOnly();
         }
     }
 
@@ -463,19 +502,6 @@ public class Matchmore
                 UnityEngine.Object.DestroyImmediate(_obj);
             else
                 UnityEngine.Object.Destroy(_obj);
-        }
-    }
-
-    private class MatchComparer : IEqualityComparer<Match>
-    {
-        public bool Equals(Match x, Match y)
-        {
-            return x.Id == y.Id;
-        }
-
-        public int GetHashCode(Match obj)
-        {
-            return obj.GetHashCode();
         }
     }
 

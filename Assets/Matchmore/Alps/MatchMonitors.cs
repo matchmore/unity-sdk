@@ -45,22 +45,27 @@ public class WebsocketMatchMonitor : IMatchMonitor
 
     public WebsocketMatchMonitor(Device device, string environment, string apiKey, bool secured, int? pusherPort, DeviceApi deviceApi, CoroutineWrapper coroutine, Action<string> closedCallback)
     {
+        if (device == null || string.IsNullOrEmpty(device.Id))
+        {
+            throw new ArgumentException("Device null or invalid id");
+        }
+
         _device = device;
         _deviceApi = deviceApi;
         _coroutine = coroutine;
         _closedCallback = closedCallback;
         var worldId = Utils.ExtractWorldId(apiKey);
 
-        UnityEngine.Debug.Log("Starting websocket");
+        UnityEngine.Debug.Log("Starting websocket for device " + device.Id);
 
         var protocol = secured ? "wss" : "ws";
         var port = pusherPort == null ? "" : ":" + pusherPort;
         var url = string.Format("{3}://{0}{4}/pusher/{1}/ws/{2}", environment, Matchmore.API_VERSION, _device.Id, protocol, port);
         _ws = new WebSocket(url, "api-key", worldId);
 
-        _ws.OnOpen += (sender, e) => UnityEngine.Debug.Log("WS opened");
-        _ws.OnClose += (sender, e) => UnityEngine.Debug.Log("WS closing " + e.Code);
-        _ws.OnError += (sender, e) => UnityEngine.Debug.Log("Error in WS " + e.Message);
+        _ws.OnOpen += (sender, e) => UnityEngine.Debug.Log("WS opened for device " + device.Id);
+        _ws.OnClose += (sender, e) => UnityEngine.Debug.Log("WS closing " + e.Code + " for device " + device.Id);
+        _ws.OnError += (sender, e) => UnityEngine.Debug.Log("Error in WS " + e.Message + " for device " + device.Id);
         _ws.OnMessage += (sender, e) =>
         {
             var data = e.Data;
@@ -70,7 +75,7 @@ public class WebsocketMatchMonitor : IMatchMonitor
             }
             else
             {
-                _coroutine.RunOnce(Id, GetMatch(e.Data));
+                _coroutine.RunOnce(Id, GetMatch(data));
             }
         };
         _ws.Connect();
@@ -119,6 +124,11 @@ public class PollingMatchMonitor : IMatchMonitor
 
     public PollingMatchMonitor(Device device, DeviceApi _deviceApi, CoroutineWrapper coroutine, Action<string> closedCallback)
     {
+        if (device == null || string.IsNullOrEmpty(device.Id))
+        {
+            throw new ArgumentException("Device null or invalid id");
+        }
+
         _device = device;
         _coroutine = coroutine;
         _closedCallback = closedCallback;
@@ -143,57 +153,5 @@ public class PollingMatchMonitor : IMatchMonitor
     {
         _coroutine.StopContinuousRoutine(_device.Id);
         _closedCallback(_device.Id);
-    }
-}
-
-public class MatchReceivedEventArgs : EventArgs
-{
-    private Device _device;
-    private Matchmore.MatchChannel _channel;
-    private List<Match> _matches;
-
-    public MatchReceivedEventArgs(Device device, Matchmore.MatchChannel channel, List<Match> matches)
-    {
-        _device = device;
-        _channel = channel;
-        _matches = matches;
-    }
-    public Device Device
-    {
-        get
-        {
-            return _device;
-        }
-
-        private set
-        {
-            _device = value;
-        }
-    }
-
-    public Matchmore.MatchChannel Channel
-    {
-        get
-        {
-            return _channel;
-        }
-
-        private set
-        {
-            _channel = value;
-        }
-    }
-
-    public List<Match> Matches
-    {
-        get
-        {
-            return _matches;
-        }
-
-        private set
-        {
-            _matches = value;
-        }
     }
 }

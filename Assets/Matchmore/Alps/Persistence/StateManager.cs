@@ -1,48 +1,27 @@
 using UnityEngine;
-using System.Collections;
-using System;
 using System.Linq;
 using Alps.Model;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Runtime.Serialization;
 using Newtonsoft.Json;
+using MatchmoreExtensions;
+using System;
 
 namespace MatchmorePersistence
 {
-    public class StateManager
+    public partial class StateManager
     {
-        [DataContract]
-        private class State
+        private State _state;
+        private string _env;
+        string _persistenceFile;
+
+        public string PersistenceFile
         {
-            [DataMember(Name = "device", EmitDefaultValue = false)]
-            [JsonProperty(PropertyName = "device")]
-            public Device Device { get; set; }
-
-            [DataMember(Name = "subscriptions", EmitDefaultValue = false)]
-            [JsonProperty(PropertyName = "subscriptions")]
-            public List<Subscription> Subscriptions { get; set; }
-
-            [DataMember(Name = "publications", EmitDefaultValue = false)]
-            [JsonProperty(PropertyName = "publications")]
-            public List<Publication> Publications { get; set; }
-
-            [DataMember(Name = "pins", EmitDefaultValue = false)]
-            [JsonProperty(PropertyName = "pins")]
-            public List<PinDevice> Pins { get; set; }
-
-            public State()
+            get
             {
-                Subscriptions = new List<Subscription>();
-                Publications = new List<Publication>();
-                Pins = new List<PinDevice>();
+                return _persistenceFile;
             }
         }
-
-        private State _state;
-
-        public string PersistenceFile { get; set; }
 
         public Device Device
         {
@@ -100,48 +79,72 @@ namespace MatchmorePersistence
             }
         }
 
-        public StateManager()
+        public StateManager(string env, string persistenceFile = null)
         {
-            PersistenceFile = "state.data";
+            _env = env;
+            _persistenceFile = string.IsNullOrEmpty(persistenceFile) ? "state.data" : persistenceFile;
             Load();
         }
 
         public void WipeData()
         {
-            //File.Delete(PersistencePath);
+            File.Delete(PersistencePath);
         }
 
         public void Load()
         {
             if (!File.Exists(PersistencePath))
             {
-                _state = new State();
+                _state = new State
+                {
+                    Environment = _env
+                };
                 return;
             }
 
             if (new FileInfo(PersistencePath).Length == 0)
             {
-                _state = new State();
+                _state = new State()
+                {
+                    Environment = _env  
+                };
                 return;
             }
 
             using (StreamReader file = File.OpenText(PersistencePath))
             {
                 JsonSerializer serializer = new JsonSerializer();
-                _state = (State)serializer.Deserialize(file, typeof(State));
+                var state = (State)serializer.Deserialize(file, typeof(State));
+                if (IsCorrectEnv(state))
+                {
+                    _state = state;
+                }
+                else
+                {
+                    throw new InvalidOperationException("State belongs to a wrong environment, please wipe the data using the WipeData() method");
+                }
             }
+        }
+
+        private bool IsCorrectEnv(State state)
+        {
+            return state.Environment == _env;
         }
 
         public void Save()
         {
-            using (StreamWriter file = File.CreateText(PersistencePath))
+            if (_state.IsDirty())
             {
-                JsonSerializer serializer = new JsonSerializer();
-                var json = JsonConvert.SerializeObject(_state, new JsonSerializerSettings
+                using (StreamWriter file = File.CreateText(PersistencePath))
                 {
-                    NullValueHandling = NullValueHandling.Ignore
-                });
-                serializer.Serialize(file, _state);
+                    JsonSerializer serializer = new JsonSerializer();
+                    var json = JsonConvert.SerializeObject(_state, new JsonSerializerSettings
+                    {
+                        NullValueHandling = NullValueHandling.Ignore
+                    });
+                    serializer.Serialize(file, _state);
+                    _state.MarkAsClean();
+                }
             }
         }
 
@@ -163,21 +166,11 @@ namespace MatchmorePersistence
             Save();
         }
 
-        public void CheckDuration()
+        public void PruneDead()
         {
-            var now = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalMilliseconds;
-            _state.Publications = _state.Publications.Where(pub =>
-            {
-                var miliDelta = now - pub.CreatedAt;
-                return miliDelta / 1000f < pub.Duration;
-            }).ToList();
+            _state.Publications = _state.Publications.Where(pub => pub.IsAlive()).ToList();
 
-            _state.Subscriptions = _state.Subscriptions.Where(sub =>
-            {
-                var miliDelta = now - sub.CreatedAt;
-                return miliDelta / 1000f < sub.Duration;
-            }).ToList();
+            _state.Subscriptions = _state.Subscriptions.Where(sub => sub.IsAlive()).ToList();
         }
     }
-
 }
