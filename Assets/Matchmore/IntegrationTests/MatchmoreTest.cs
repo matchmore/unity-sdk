@@ -52,8 +52,10 @@ public class MatchmoreTest
         Match match = null;
 
         var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.Polling);
-        monitor.MatchReceived += (sender, e) => {
-            match = e.Matches[0];
+        monitor.MatchReceived += (sender, e) =>
+        {
+            if (e.Matches.Count() > 0)
+                match = e.Matches[0];
         };
 
         for (int i = 10 - 1; i >= 0; i--)
@@ -83,8 +85,10 @@ public class MatchmoreTest
         Match match = null;
 
         matchMore.SubscribeMatches(Matchmore.MatchChannel.Polling);
-        matchMore.MatchReceived += (sender, e) => {
-            match = e.Matches[0];
+        matchMore.MatchReceived += (sender, e) =>
+        {
+            if (e.Matches.Count() > 0)
+                match = e.Matches[0];
         };
 
         for (int i = 10 - 1; i >= 0; i--)
@@ -111,7 +115,8 @@ public class MatchmoreTest
         var matches = new List<Match>();
         matchMore.SubscribeMatches(Matchmore.MatchChannel.Websocket);
 
-        matchMore.MatchReceived += (sender, e) => {
+        matchMore.MatchReceived += (sender, e) =>
+        {
             matches = e.Matches;
         };
 
@@ -145,7 +150,8 @@ public class MatchmoreTest
         var matches = new List<Match>();
         var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.Websocket);
 
-        monitor.MatchReceived += (sender, e) => {
+        monitor.MatchReceived += (sender, e) =>
+        {
             matches = e.Matches;
         };
 
@@ -309,6 +315,15 @@ public class MatchmoreTest
 
     private Matchmore SetupMatchmore()
     {
-        return new Matchmore(API_KEY, ENVIRONMENT, useSecuredCommunication: false, servicePort: servicePort, pusherPort: pusherPort, persistenceFile: "integrationstate.dat");
+        var config = new Matchmore.Config
+        {
+            ApiKey = API_KEY,
+            Environment = ENVIRONMENT,
+            UseSecuredCommunication = false,
+            ServicePort = servicePort,
+            PusherPort = pusherPort,
+            PersistenceFile = "integrationstate.dat"
+        };
+        return new Matchmore(config);
     }
 }

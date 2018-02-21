@@ -20,9 +20,10 @@ public class MatchmoreExample : MonoBehaviour
 
     public void Start()
     {
-        Matchmore.Configure(apiKey, useSecuredCommunication: false);
+        var config = Matchmore.Config.WithApiKey(apiKey);
+        config.UseSecuredCommunication = false;
+        Matchmore.Configure(config);
         Matchmore.Instance.WipeData();
-
     }
 
     public IEnumerator MatchmoreCoroutine()
@@ -95,17 +96,6 @@ public class MatchmoreExample : MonoBehaviour
         Matchmore.Instance.MatchReceived += (sender, e) => {
             LogLine(string.Format("Received match {0} from device {1} with channel {2}", e.Matches[0].Id, e.Device.Id, e.Channel));
         };
-
-        ////or using a lambda
-        //Matchmore.Instance.SubscribeMatches(_matches =>
-        //{
-        //    matches.ForEach(m => {
-        //        logText.text += "\n Got Match " + m.Id + " from polling with lambda";
-        //    });
-        //});
-
-        ////similar api is available for websocket connections
-        //Matchmore.Instance.SubscribeMatchesWithWS(HandleMatches);
     }
 
     private void LogLine(string line)

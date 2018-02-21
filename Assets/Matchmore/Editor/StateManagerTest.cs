@@ -7,11 +7,12 @@ public class StateManagerTest
 {
     private StateManager state;
     private string localhost = "localhost";
+    private readonly string stateManagerFile = "statemanagertest.data";
 
     [SetUp]
     public void Init()
     {
-        state = new StateManager(localhost);
+        state = new StateManager(localhost, stateManagerFile);
     }
 
     [TearDown]
@@ -34,7 +35,7 @@ public class StateManagerTest
             Selector = "test = true and price <= 200"
         });
         state = null;
-        var newState = new StateManager(localhost);
+        var newState = new StateManager(localhost, stateManagerFile);
         var persistedSub = newState.ActiveSubscriptions.Find(s => s.Id == "nonsense_id");
         Assert.NotNull(persistedSub);
     }
@@ -55,7 +56,7 @@ public class StateManagerTest
             }
         });
         state = null;
-        var newState = new StateManager(localhost);
+        var newState = new StateManager(localhost, stateManagerFile);
         var persistedPub = newState.ActivePublications.Find(p => p.Id == "nonsense_id");
         Assert.NotNull(persistedPub);
     }
@@ -77,7 +78,7 @@ public class StateManagerTest
 
         state.AddPinDevice(pin);
         state = null;
-        var newState = new StateManager(localhost);
+        var newState = new StateManager(localhost, stateManagerFile);
         var persistedPin = newState.Pins.Find(p => p.Id == "nonsense_id");
         Assert.AreEqual(pin.Id, persistedPin.Id);
         Assert.AreEqual(pin.Name, persistedPin.Name);

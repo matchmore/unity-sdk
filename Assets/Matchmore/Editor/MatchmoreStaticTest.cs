@@ -20,8 +20,8 @@ public class MatchmoreStaticTest
     [Test]
     public void Configure_static_instance()
     {
-        string API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiMzU2OGRhMWMtM2YxYS00MzdiLWFiNjYtN2JlNmU4Y2IzODg2IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTg1MjEwNzMsImlhdCI6MTUxODUyMTA3MywianRpIjoiMSJ9.Jt4FtCApf5xHxwgmsT1xrZuRK53krIP886TptVn-7QRqZYpwX1RE5svrfUmn1XUcuVxWum-qwDIi_BvoVmykyg";
-        Matchmore.Configure(API_KEY);
+        var apiKey = "eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhbHBzIiwic3ViIjoiMzU2OGRhMWMtM2YxYS00MzdiLWFiNjYtN2JlNmU4Y2IzODg2IiwiYXVkIjpbIlB1YmxpYyJdLCJuYmYiOjE1MTg1MjEwNzMsImlhdCI6MTUxODUyMTA3MywianRpIjoiMSJ9.Jt4FtCApf5xHxwgmsT1xrZuRK53krIP886TptVn-7QRqZYpwX1RE5svrfUmn1XUcuVxWum-qwDIi_BvoVmykyg";
+        Matchmore.Configure(Matchmore.Config.WithApiKey(apiKey));
         Assert.NotNull(Matchmore.Instance);
         Assert.AreEqual("https://" + Matchmore.PRODUCTION + "/v5", Matchmore.Instance.ApiUrl);
     }
@@ -29,8 +29,8 @@ public class MatchmoreStaticTest
     [Test]
     public void Throws_on_invalid_key()
     {
-        string API_KEY = "invalid key";
-        Assert.Throws<ArgumentException>(() => Matchmore.Configure(API_KEY));
+        var apiKey = "invalid key";
+        Assert.Throws<ArgumentException>(() => Matchmore.Configure(apiKey));
 
         Assert.Null(Matchmore.Instance);
     }

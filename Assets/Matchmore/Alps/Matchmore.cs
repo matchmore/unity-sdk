@@ -53,6 +53,32 @@ public class Matchmore
         Websocket = 1
     }
 
+    public class Config
+    {
+        public string ApiKey { get; set; }
+        public string Environment { get; set; }
+        public bool UseSecuredCommunication { get; set; }
+        public bool StartWebsocketImmediately { get; set; }
+        public string WorldId { get; set; }
+        public int? PusherPort { get; set; }
+        public int? ServicePort { get; set; }
+        public string PersistenceFile { get; set; }
+
+        public Config()
+        {
+            UseSecuredCommunication = true;
+        }
+
+        public static Config WithApiKey(string apiKey)
+        {
+            return new Config
+            {
+                ApiKey = apiKey
+            };
+        }
+    }
+
+
     public Dictionary<string, IMatchMonitor> Monitors
     {
         get
@@ -93,22 +119,17 @@ public class Matchmore
         }
     }
 
-    /// <summary>
-    /// Configure the specified apiKey, environment, useSecuredCommunication, startWebsocketImmediately and worldId.
-    /// </summary>
-    /// <returns>The configure.</returns>
-    /// <param name="apiKey">API key received from the Matchmore portal</param>
-    /// <param name="environment">Environment, by default it will be production</param>
-    /// <param name="useSecuredCommunication">If set to <c>true</c> use secured communication.</param>
-    /// <param name="startWebsocketImmediately">If set to <c>true</c> start websocket immediately.</param>
-    /// <param name="worldId">World identifier.</param>
-    public static void Configure(string apiKey, string environment = null, bool useSecuredCommunication = true, bool startWebsocketImmediately = false, string worldId = null)
+    public static void Configure(string apiKey){
+        Configure(Config.WithApiKey(apiKey));
+    }
+
+    public static void Configure(Config config)
     {
         if (Instance != null)
         {
             throw new InvalidOperationException("Matchmore static instance already configured");
         }
-        Instance = new Matchmore(apiKey, environment, useSecuredCommunication, startWebsocketImmediately, worldId);
+        Instance = new Matchmore(config);
     }
 
     public static void Reset()
@@ -135,32 +156,31 @@ public class Matchmore
         }
     }
 
-    public Matchmore(string apiKey, string environment = null, bool useSecuredCommunication = true, bool starWebsocketImmediately = false, string worldId = null, int? servicePort = null, int? pusherPort = null, string persistenceFile = null)
+    public Matchmore(Config config)
     {
-        if (string.IsNullOrEmpty(apiKey))
+        if (string.IsNullOrEmpty(config.ApiKey))
         {
             throw new ArgumentException("Api key null or empty");
         }
 
-        if (string.IsNullOrEmpty(worldId))
+        if (string.IsNullOrEmpty(config.WorldId))
         {
-            var deserializedApiKey = Utils.ExtractWorldId(apiKey);
+            var deserializedApiKey = Utils.ExtractWorldId(config.ApiKey);
             _worldId = deserializedApiKey;
         }
         else
         {
-            _worldId = worldId;
+            _worldId = config.WorldId;
         }
 
-        _servicePort = servicePort;
-        _pusherPort = pusherPort;
-        _environment = environment ?? PRODUCTION;
-        _apiKey = apiKey;
-        _secured = useSecuredCommunication;
-
+        _apiKey = config.ApiKey;
+        _servicePort = config.ServicePort;
+        _pusherPort = config.PusherPort;
+        _environment = config.Environment ?? PRODUCTION;
+        _secured = config.UseSecuredCommunication;
         InitGameObjects();
 
-        _state = new StateManager(_environment, persistenceFile);
+        _state = new StateManager(_environment, config.PersistenceFile);
 
         if (MainDevice == null)
         {
