@@ -8,8 +8,9 @@ using MatchmorePersistence;
 using System.Collections;
 using System.Collections.ObjectModel;
 
-public class Matchmore
+public partial class Matchmore
 {
+    private static Matchmore _instance;
     public static readonly string API_VERSION = "v5";
     public static readonly string PRODUCTION = "api.matchmore.io";
     private ApiClient _client;
@@ -20,11 +21,10 @@ public class Matchmore
     private string _environment;
     private string _apiKey;
     private bool _secured;
-    private string _worldId;
     private int? _servicePort;
-    private int? _pusherPort;
     private Dictionary<string, IMatchMonitor> _monitors = new Dictionary<string, IMatchMonitor>();
     private List<EventHandler<MatchReceivedEventArgs>> _eventHandlers = new List<EventHandler<MatchReceivedEventArgs>>();
+    private readonly Config _config;
 
     public event EventHandler<MatchReceivedEventArgs> MatchReceived
     {
@@ -52,32 +52,6 @@ public class Matchmore
         Polling = 0,
         Websocket = 1
     }
-
-    public class Config
-    {
-        public string ApiKey { get; set; }
-        public string Environment { get; set; }
-        public bool UseSecuredCommunication { get; set; }
-        public bool StartWebsocketImmediately { get; set; }
-        public string WorldId { get; set; }
-        public int? PusherPort { get; set; }
-        public int? ServicePort { get; set; }
-        public string PersistenceFile { get; set; }
-
-        public Config()
-        {
-            UseSecuredCommunication = true;
-        }
-
-        public static Config WithApiKey(string apiKey)
-        {
-            return new Config
-            {
-                ApiKey = apiKey
-            };
-        }
-    }
-
 
     public Dictionary<string, IMatchMonitor> Monitors
     {
@@ -138,11 +112,8 @@ public class Matchmore
         {
             _instance.CleanUp();
             _instance = null;
-
         }
     }
-
-    private static Matchmore _instance;
 
     public static Matchmore Instance
     {
@@ -158,24 +129,17 @@ public class Matchmore
 
     public Matchmore(Config config)
     {
+        _config = config;
+
+        MatchmoreLogger.Enabled = config.LoggingEnabled;
+
         if (string.IsNullOrEmpty(config.ApiKey))
         {
             throw new ArgumentException("Api key null or empty");
         }
 
-        if (string.IsNullOrEmpty(config.WorldId))
-        {
-            var deserializedApiKey = Utils.ExtractWorldId(config.ApiKey);
-            _worldId = deserializedApiKey;
-        }
-        else
-        {
-            _worldId = config.WorldId;
-        }
-
         _apiKey = config.ApiKey;
         _servicePort = config.ServicePort;
-        _pusherPort = config.PusherPort;
         _environment = config.Environment ?? PRODUCTION;
         _secured = config.UseSecuredCommunication;
         InitGameObjects();
@@ -206,6 +170,7 @@ public class Matchmore
         // First, check if user has location service enabled
         if (!Input.location.isEnabledByUser)
         {
+            MatchmoreLogger.Debug("Location service disabled by user");
 # if !UNITY_IOS
             //https://docs.unity3d.com/ScriptReference/LocationService-isEnabledByUser.html
             //if it is IOS we do not break here
@@ -228,7 +193,6 @@ public class Matchmore
         // Service didn't initialize in 20 seconds
         if (maxWait < 1)
         {
-            //print("Timed out");
             yield break;
         }
 
@@ -263,6 +227,9 @@ public class Matchmore
         _client.AddDefaultHeader("api-key", _apiKey);
         _deviceApi = new DeviceApi(_client);
         _obj = new GameObject("MatchMoreObject");
+        if(_config.LoggingEnabled){
+            MatchmoreLogger.Context = _obj;
+        }
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
     }
 
@@ -532,6 +499,6 @@ public class Matchmore
 
     private WebsocketMatchMonitor CreateWebsocketMonitor(Device device)
     {
-        return new WebsocketMatchMonitor(device, _environment, _apiKey, _secured, _pusherPort, _deviceApi, _coroutine, id => _monitors.Remove(id));
+        return new WebsocketMatchMonitor(device, _config, _deviceApi, _coroutine, id => _monitors.Remove(id));
     }
 }

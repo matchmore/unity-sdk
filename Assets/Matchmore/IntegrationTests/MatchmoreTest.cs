@@ -322,7 +322,8 @@ public class MatchmoreTest
             UseSecuredCommunication = false,
             ServicePort = servicePort,
             PusherPort = pusherPort,
-            PersistenceFile = "integrationstate.dat"
+            PersistenceFile = "integrationstate.dat",
+            LoggingEnabled = true
         };
         return new Matchmore(config);
     }

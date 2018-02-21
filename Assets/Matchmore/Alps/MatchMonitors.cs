@@ -43,7 +43,7 @@ public class WebsocketMatchMonitor : IMatchMonitor
         }
     }
 
-    public WebsocketMatchMonitor(Device device, string environment, string apiKey, bool secured, int? pusherPort, DeviceApi deviceApi, CoroutineWrapper coroutine, Action<string> closedCallback)
+    public WebsocketMatchMonitor(Device device, Matchmore.Config config, DeviceApi deviceApi, CoroutineWrapper coroutine, Action<string> closedCallback)
     {
         if (device == null || string.IsNullOrEmpty(device.Id))
         {
@@ -54,18 +54,18 @@ public class WebsocketMatchMonitor : IMatchMonitor
         _deviceApi = deviceApi;
         _coroutine = coroutine;
         _closedCallback = closedCallback;
-        var worldId = Utils.ExtractWorldId(apiKey);
+        var worldId = Utils.ExtractWorldId(config.ApiKey);
 
-        UnityEngine.Debug.Log("Starting websocket for device " + device.Id);
+        MatchmoreLogger.Debug("Starting websocket for device {0}", device.Id);
 
-        var protocol = secured ? "wss" : "ws";
-        var port = pusherPort == null ? "" : ":" + pusherPort;
-        var url = string.Format("{3}://{0}{4}/pusher/{1}/ws/{2}", environment, Matchmore.API_VERSION, _device.Id, protocol, port);
+        var protocol = config.UseSecuredCommunication ? "wss" : "ws";
+        var port = config.PusherPort == null ? "" : ":" + config.PusherPort;
+        var url = string.Format("{3}://{0}{4}/pusher/{1}/ws/{2}", config.Environment, Matchmore.API_VERSION, _device.Id, protocol, port);
         _ws = new WebSocket(url, "api-key", worldId);
 
-        _ws.OnOpen += (sender, e) => UnityEngine.Debug.Log("WS opened for device " + device.Id);
-        _ws.OnClose += (sender, e) => UnityEngine.Debug.Log("WS closing " + e.Code + " for device " + device.Id);
-        _ws.OnError += (sender, e) => UnityEngine.Debug.Log("Error in WS " + e.Message + " for device " + device.Id);
+        _ws.OnOpen += (sender, e) => MatchmoreLogger.Debug("WS opened for device {0}", device.Id);
+        _ws.OnClose += (sender, e) => MatchmoreLogger.Debug("WS closing {0} for device {1}", e.Code, device.Id);
+        _ws.OnError += (sender, e) => MatchmoreLogger.Debug("Error in WS {0} for device {1}", e.Message, device.Id);
         _ws.OnMessage += (sender, e) =>
         {
             var data = e.Data;
