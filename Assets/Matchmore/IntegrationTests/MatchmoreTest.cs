@@ -176,6 +176,25 @@ public class MatchmoreTest
         Assert.IsNotNull(match);
     }
 
+    [UnityTest]
+    public IEnumerator Create_pin_device()
+    {
+        var matchMore = SetupMatchmore();
+        var pin = matchMore.CreatePinDevice(new PinDevice{
+            Name= "test_pin",
+            Location = new Location{
+                Longitude = 13,
+                Latitude = 37,
+                Altitude =0
+            }
+        });
+
+        Assert.IsNotNull(pin);
+        Assert.IsNotNull(pin.Id);
+
+        yield return null;
+    }
+
     [Test]
     public void Main_device_persistence()
     {

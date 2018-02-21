@@ -310,10 +310,23 @@ public partial class Matchmore
             throw new ArgumentException("Location required for Pin Device");
         }
 
-        var createdDevice = (PinDevice)_deviceApi.CreateDevice(pinDevice);
-        _state.AddPinDevice(createdDevice);
+        var createdDevice = _deviceApi.CreateDevice(pinDevice);
 
-        return createdDevice;
+        //The generated swagger api returns a generic device partially losing the information about the pin.
+        //We rewrite the data to fit the pin device contract.
+        var createdPin = new PinDevice
+        {
+            Id = createdDevice.Id,
+            CreatedAt = createdDevice.CreatedAt,
+            DeviceType = createdDevice.DeviceType,
+            Location = pinDevice.Location,
+            Group = createdDevice.Group,
+            Name = createdDevice.Name,
+            UpdatedAt = createdDevice.UpdatedAt
+        };
+        _state.AddPinDevice(createdPin);
+
+        return createdPin;
     }
 
     public Tuple<PinDevice, IMatchMonitor> CreatePinDeviceAndStartListening(PinDevice pinDevice, MatchChannel channel)
