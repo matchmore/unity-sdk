@@ -13,13 +13,14 @@ The `Matchmore` is a static wrapper that provides you all the functions you need
 ## Usage
 
 ```
-	//use static instance
-	var API_KEY = //get the api key in from the portal
-	Matchmore.Configure(API_KEY); // we register the device as the main device
-	var mainDevice = Matchmore.Instance.MainDevice;
+        //get the api key from our portal
+        var config = Matchmore.Config.WithApiKey(apiKey);
+        Matchmore.Configure(config);
+	    // we register the device as the main device
+        var mainDevice = Matchmore.Instance.MainDevice;
 
-	//methods interacting with devices by default use the main device, but there are overloads to provide other devices
-	Matchmore.Instance.CreatePublication(new Publication
+        //methods interacting with devices by default use the main device, but there are overloads to provide other devices
+        var pub = Matchmore.Instance.CreatePublication(new Publication
         {
             Topic = "Unity",
             Duration = 30,
@@ -29,7 +30,8 @@ The `Matchmore` is a static wrapper that provides you all the functions you need
                 {"price", 199}
             }
         });
-    Matchmore.Instance.CreateSubscription(new Subscription
+
+        var sub = Matchmore.Instance.CreateSubscription(new Subscription
         {
             Topic = "Unity",
             Duration = 30,
@@ -38,29 +40,49 @@ The `Matchmore` is a static wrapper that provides you all the functions you need
             Pushers = new List<string>() { "ws" }
         });
 
-    //this method is available but we run a coroutine in the background which starts the unity location service and runs this call every time the location was changed
-    Matchmore.Instance.UpdateLocation(new Location
+        foreach (var _pub in Matchmore.Instance.ActivePublications)
+        {
+            LogLine(string.Format("Pub {0} existings for another {1} seconds", _pub.Id, _pub.SecondsRemaining()));
+        }
+
+        foreach (var _sub in Matchmore.Instance.ActiveSubscriptions)
+        {
+            LogLine(string.Format("Sub {0} existing for another {1} seconds", _sub.Id, _sub.SecondsRemaining()));
+        }
+
+        //this method is available but we run a coroutine in the background which starts the unity location service and runs this call every time the location was changed
+        Matchmore.Instance.UpdateLocation(new Location
         {
             Latitude = 54.414662,
             Longitude = 18.625498
         });
 
-    //query for available matches
-    var matches = Matchmore.Instance.GetMatches();
+        //query for available matches via a single request
+        var matches = Matchmore.Instance.GetMatches();
+        matches.ForEach(m =>
+        {
+            LogLine("Got Match " + m.Id + " single call");
+        });
 
-    //create a delegate which will fire on matches, using polling
-    public void HandleMatches(List<Match> matches) {
+        //creates a monitor on a single device which has an event handler(by default the main one)
+        var socketMonitor = Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.Websocket);
 
-    }
-    Matchmore.Instance.SubscribeMatches(HandleMatches);
+        //creates a monitor on a single device which has an event handler(by default the main one)
+        var pollingMonitor = Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.Polling);
 
-    //or using a lambda
-    Matchmore.Instance.SubscribeMatches(matches => {
+        //this event handler fires only for a single device
+        socketMonitor.MatchReceived += (sender, e) => {
+            LogLine(string.Format("Received match {0} from device {1} with channel {2} directly from monitor", e.Matches[0].Id, e.Device.Id, e.Channel));
+        };
 
-    	});
+        pollingMonitor.MatchReceived += (sender, e) => {
+            LogLine(string.Format("Received match {0} from device {1} with channel {2} directly from monitor", e.Matches[0].Id, e.Device.Id, e.Channel));
+        };
 
-    //similar api is available for websocket connections
-    Matchmore.Instance.SubscribeMatchesWithWS(HandleMatches);
+        //this event handler fires for all devices created
+        Matchmore.Instance.MatchReceived += (sender, e) => {
+            LogLine(string.Format("Received match {0} from device {1} with channel {2}", e.Matches[0].Id, e.Device.Id, e.Channel));
+        };
 
 ```
 
