@@ -21,7 +21,8 @@
         {
             return new Config
             {
-                ApiKey = apiKey
+                ApiKey = apiKey,
+                UseSecuredCommunication = true
             };
         }
     }

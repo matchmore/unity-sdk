@@ -52,6 +52,10 @@ namespace Alps.Model {
     [JsonProperty(PropertyName = "topic")]
     public string Topic { get; set; }
 
+    [DataMember(Name = "location", EmitDefaultValue = false)]
+    [JsonProperty(PropertyName = "location")]
+    public Location Location { get; set; }
+
     /// <summary>
     /// This is an expression to filter the publications. For instance 'job='developer'' will allow matching only with publications containing a 'job' key with a value of 'developer'. 
     /// </summary>

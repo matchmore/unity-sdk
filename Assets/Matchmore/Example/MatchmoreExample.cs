@@ -78,10 +78,10 @@ public class MatchmoreExample : MonoBehaviour
         });
 
         //creates a monitor on a single device which has an event handler(by default the main one)
-        var socketMonitor = Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.Websocket);
+        var socketMonitor = Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.websocket);
 
         //creates a monitor on a single device which has an event handler(by default the main one)
-        var pollingMonitor = Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.Polling);
+        var pollingMonitor = Matchmore.Instance.SubscribeMatches(Matchmore.MatchChannel.polling);
 
         //this event handler fires only for a single device
         socketMonitor.MatchReceived += (sender, e) => {

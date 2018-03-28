@@ -52,6 +52,10 @@ namespace Alps.Model {
     [JsonProperty(PropertyName = "topic")]
     public string Topic { get; set; }
 
+    [DataMember(Name = "location", EmitDefaultValue = false)]
+    [JsonProperty(PropertyName = "location")]
+    public Location Location { get; set; }
+
     /// <summary>
     /// The range of the publication in meters. This is the range around the device holding the publication in which matches with subscriptions can be triggered. 
     /// </summary>

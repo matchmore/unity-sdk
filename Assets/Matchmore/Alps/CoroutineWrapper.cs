@@ -12,11 +12,10 @@ using System.Linq;
 
 public class CoroutineWrapper : MonoBehaviour
 {
-
-
     private Dictionary<string, Action> _actions = new Dictionary<string, Action>();
     private Dictionary<string, IEnumerator> _routines = new Dictionary<string, IEnumerator>();
     private List<string> _toDeleteActions = new List<string>();
+    private object obj = new object();
 
     public void SetupContinuousRoutine(string id, Action action)
     {
@@ -25,7 +24,8 @@ public class CoroutineWrapper : MonoBehaviour
         _actions.Add(id, action);
     }
 
-    public void StopContinuousRoutine(string id){
+    public void StopContinuousRoutine(string id)
+    {
         _toDeleteActions.Add(id);
     }
 
@@ -49,21 +49,22 @@ public class CoroutineWrapper : MonoBehaviour
     {
         while (true)
         {
-            ProcessActions();
-            ProcessOneTimeRoutines();
+            yield return ProcessActions();
+            yield return ProcessOneTimeRoutines();
 
             yield return new WaitForSeconds(1);
         }
     }
 
-    private void ProcessOneTimeRoutines()
+    private IEnumerator ProcessOneTimeRoutines()
     {
         var toDeleteRoutines = new List<string>();
-
-        foreach (KeyValuePair<string, IEnumerator> entry in _routines)
+        var keys = new List<string>(_routines.Keys);
+        foreach (var key in keys)
         {
-            StartCoroutine(entry.Value);
-            toDeleteRoutines.Add(entry.Key);
+            StartCoroutine(_routines[key]);
+            toDeleteRoutines.Add(key);
+            yield return null;
         }
 
         _toDeleteActions = new List<string>();
@@ -72,13 +73,17 @@ public class CoroutineWrapper : MonoBehaviour
         {
             _routines.Remove(key);
         }
+
     }
 
-    private void ProcessActions()
+    private IEnumerator ProcessActions()
     {
-        foreach (KeyValuePair<string, Action> entry in _actions)
+        var keys = new List<string>(_actions.Keys);
+
+        foreach (var key in keys)
         {
-            entry.Value();
+            _actions[key]();
+            yield return null;
         }
 
         foreach (var key in _toDeleteActions)

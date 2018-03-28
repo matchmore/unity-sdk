@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using Alps.Api;
 using Alps.Model;
+using MatchmoreUtils;
 using WebSocketSharp;
 
 public interface IMatchMonitor
@@ -84,7 +86,7 @@ public class WebsocketMatchMonitor : IMatchMonitor
     private IEnumerator GetMatch(string matchId)
     {
         var match = _deviceApi.GetMatch(_device.Id, matchId);
-        OnMatchReceived(new MatchReceivedEventArgs(_device, Matchmore.MatchChannel.Polling, new List<Match>() { match }));
+        OnMatchReceived(new MatchReceivedEventArgs(_device, Matchmore.MatchChannel.polling, new List<Match>() { match }));
         yield return null;
     }
 
@@ -136,7 +138,7 @@ public class PollingMatchMonitor : IMatchMonitor
         _coroutine.SetupContinuousRoutine(device.Id, () =>
         {
             var matches = _deviceApi.GetMatches(device.Id);
-            OnMatchReceived(new MatchReceivedEventArgs(device, Matchmore.MatchChannel.Polling, matches));
+            OnMatchReceived(new MatchReceivedEventArgs(device, Matchmore.MatchChannel.polling, matches));
         });
     }
 
@@ -152,6 +154,70 @@ public class PollingMatchMonitor : IMatchMonitor
     public void Stop()
     {
         _coroutine.StopContinuousRoutine(_device.Id);
+        _closedCallback(_device.Id);
+    }
+}
+
+
+public class ThreadedPollingMatchMonitor : ThreadedJob, IMatchMonitor
+{
+    private readonly Action<string> _closedCallback;
+    private readonly Device _device;
+    private DeviceApi _deviceApi;
+    private bool _running;
+    private CoroutineWrapper _coroutine;
+    private Matches _matches;
+
+    public event EventHandler<MatchReceivedEventArgs> MatchReceived;
+
+    public string Id
+    {
+        get
+        {
+            return _device.Id;
+        }
+    }
+
+    public ThreadedPollingMatchMonitor(Device device, DeviceApi deviceApi, CoroutineWrapper coroutine,  Action<string> closedCallback)
+    {
+        if (device == null || string.IsNullOrEmpty(device.Id))
+        {
+            throw new ArgumentException("Device null or invalid id");
+        }
+
+        _deviceApi = deviceApi;
+        _device = device;
+        _coroutine = coroutine;
+        _closedCallback = closedCallback;
+        _running = true;
+        Start();
+
+        _coroutine.SetupContinuousRoutine(device.Id, () =>
+        {
+            OnMatchReceived(new MatchReceivedEventArgs(device, Matchmore.MatchChannel.threadedPolling, _matches));
+        });
+    }
+
+    protected override void ThreadFunction(){
+        while (_running)
+        {
+            _matches = _deviceApi.GetMatches(_device.Id);
+            Thread.Sleep(1000);
+        }
+    }
+
+    private void OnMatchReceived(MatchReceivedEventArgs e)
+    {
+        EventHandler<MatchReceivedEventArgs> handler = MatchReceived;
+        if (handler != null)
+        {
+            handler(this, e);
+        }
+    }
+
+    public void Stop()
+    {
+        _running = false;
         _closedCallback(_device.Id);
     }
 }

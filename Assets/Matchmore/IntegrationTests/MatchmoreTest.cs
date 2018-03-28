@@ -13,6 +13,7 @@ public class MatchmoreTest
     public int? servicePort = 9000;
     public int? pusherPort = 9001;
 
+
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_poll()
     {
@@ -43,6 +44,7 @@ public class MatchmoreTest
     [UnityTest]
     public IEnumerator Add_device_pub_sub_and_get_match_via_polling_event_direct_monitor()
     {
+        
         var matchMore = SetupMatchmore();
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
         Subscription sub;
@@ -51,7 +53,7 @@ public class MatchmoreTest
 
         Match match = null;
 
-        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.Polling);
+        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.polling);
         monitor.MatchReceived += (sender, e) =>
         {
             if (e.Matches.Count() > 0)
@@ -84,7 +86,7 @@ public class MatchmoreTest
 
         Match match = null;
 
-        matchMore.SubscribeMatches(Matchmore.MatchChannel.Polling);
+        matchMore.SubscribeMatches(Matchmore.MatchChannel.polling);
         matchMore.MatchReceived += (sender, e) =>
         {
             if (e.Matches.Count() > 0)
@@ -113,7 +115,7 @@ public class MatchmoreTest
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
 
         var matches = new List<Match>();
-        matchMore.SubscribeMatches(Matchmore.MatchChannel.Websocket);
+        matchMore.SubscribeMatches(Matchmore.MatchChannel.websocket);
 
         matchMore.MatchReceived += (sender, e) =>
         {
@@ -148,7 +150,77 @@ public class MatchmoreTest
         var subDevice = CreateMobileDevice(matchMore, makeMain: true);
 
         var matches = new List<Match>();
-        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.Websocket);
+        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.websocket);
+
+        monitor.MatchReceived += (sender, e) =>
+        {
+            matches = e.Matches;
+        };
+
+        Subscription sub;
+        Publication pub;
+        SetupMatch(matchMore, subDevice, out sub, out pub);
+
+        Match match = null;
+        for (int i = 10 - 1; i >= 0; i--)
+        {
+            match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
+            if (match != null)
+            {
+                break;
+            }
+            else
+            {
+                yield return new WaitForSeconds(3);
+            }
+        }
+
+        Assert.IsNotNull(match);
+    }
+
+    [UnityTest]
+    public IEnumerator Add_device_pub_sub_and_get_match_via_thread_main_handler()
+    {
+        var matchMore = SetupMatchmore();
+        var subDevice = CreateMobileDevice(matchMore, makeMain: true);
+
+        var matches = new List<Match>();
+        matchMore.SubscribeMatches(Matchmore.MatchChannel.threadedPolling);
+
+        matchMore.MatchReceived += (sender, e) =>
+        {
+            matches = e.Matches;
+        };
+
+        Subscription sub;
+        Publication pub;
+        SetupMatch(matchMore, subDevice, out sub, out pub);
+
+        Match match = null;
+        for (int i = 10 - 1; i >= 0; i--)
+        {
+            match = matches.Find(m => m.Publication.Id == pub.Id && m.Subscription.Id == sub.Id);
+            if (match != null)
+            {
+                break;
+            }
+            else
+            {
+                yield return new WaitForSeconds(3);
+            }
+        }
+
+        Assert.IsNotNull(match);
+    }
+
+    [UnityTest]
+    public IEnumerator Add_device_pub_sub_and_get_match_via_thread_direct_monitor()
+    {
+        var matchMore = SetupMatchmore();
+        var subDevice = CreateMobileDevice(matchMore, makeMain: true);
+
+        var matches = new List<Match>();
+        var monitor = matchMore.SubscribeMatches(Matchmore.MatchChannel.threadedPolling);
 
         monitor.MatchReceived += (sender, e) =>
         {

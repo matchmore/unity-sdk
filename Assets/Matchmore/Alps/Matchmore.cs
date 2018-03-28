@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using MatchmorePersistence;
 using System.Collections;
 using System.Collections.ObjectModel;
+using MatchmoreLocation;
+using MatchmoreUtils;
 
 public partial class Matchmore
 {
@@ -25,6 +27,7 @@ public partial class Matchmore
     private Dictionary<string, IMatchMonitor> _monitors = new Dictionary<string, IMatchMonitor>();
     private List<EventHandler<MatchReceivedEventArgs>> _eventHandlers = new List<EventHandler<MatchReceivedEventArgs>>();
     private readonly Config _config;
+    private ILocationService _locationService;
 
     public event EventHandler<MatchReceivedEventArgs> MatchReceived
     {
@@ -46,12 +49,22 @@ public partial class Matchmore
         }
     }
 
+    /// <summary>
+    /// Match channel via which the matches will be delivered
+    /// </summary>
     [Flags]
     public enum MatchChannel
     {
-        Polling = 0,
-        Websocket = 1
+        polling = 0,
+        websocket = 1,
+        threadedPolling = 2
     }
+
+    /// <summary>
+    /// Gets the game object to which some feature ar attached
+    /// </summary>
+    /// <value>The object.</value>
+    public GameObject Obj { get { return _obj; } }
 
     public Dictionary<string, IMatchMonitor> Monitors
     {
@@ -74,6 +87,16 @@ public partial class Matchmore
         }
     }
 
+    /// <summary>
+    /// Mock location for development purposes which will be used instead of the device location
+    /// </summary>
+    /// <value>The mock location.</value>
+    public Location MockLocation { get; set; }
+
+    /// <summary>
+    /// Gets the API URL.
+    /// </summary>
+    /// <value>The API URL.</value>
     public string ApiUrl
     {
         get
@@ -89,21 +112,21 @@ public partial class Matchmore
                 var protocol = _secured ? "https" : "http";
                 return String.Format("{0}://{1}/{2}", protocol, PRODUCTION, API_VERSION);
             }
-
         }
     }
 
-    public static void Configure(string apiKey){
+    public static void Configure(string apiKey)
+    {
         Configure(Config.WithApiKey(apiKey));
     }
 
     public static void Configure(Config config)
     {
-        if (Instance != null)
+        if (_instance != null)
         {
             throw new InvalidOperationException("Matchmore static instance already configured");
         }
-        Instance = new Matchmore(config);
+        _instance = new Matchmore(config);
     }
 
     public static void Reset()
@@ -115,15 +138,16 @@ public partial class Matchmore
         }
     }
 
+    //
     public static Matchmore Instance
     {
         get
         {
+            if (_instance == null)
+            {
+                throw new InvalidOperationException("Matchmore not initialized!!!");
+            }
             return _instance;
-        }
-        private set
-        {
-            _instance = value;
         }
     }
 
@@ -152,73 +176,37 @@ public partial class Matchmore
         }
 
         _coroutine.SetupContinuousRoutine("persistence", _state.PruneDead);
-        StartLocationService();
     }
 
-    public void StartLocationService()
+    /// <summary>
+    /// Starts the location service with specified type
+    /// Coroutined, uses a dedicated coroutine
+    /// Threaded, creates an ongoing thread which polls the Unity location service and reports it to matchmore
+    /// </summary>
+    /// <param name="type">Type,</param>
+    public void StartLocationService(LocationServiceType type)
     {
-        _coroutine.RunOnce("location_service", StartLocationServiceCoroutine());
+        if (_locationService != null)
+        {
+            _locationService.Stop();
+        }
+        Action<Location> update = loc => UpdateLocation(loc);
+        switch (type)
+        {
+            case LocationServiceType.coroutine:
+                _locationService = new CoroutinedLocationService(_coroutine, update);
+                break;
+            case LocationServiceType.threaded:
+                _locationService = new ThreadedLocationSercixe(_coroutine, update);
+                break;
+        }
+        _locationService.MockLocation = MockLocation;
+        _locationService.Start();
     }
 
     public void WipeData()
     {
         _state.WipeData();
-    }
-
-    IEnumerator StartLocationServiceCoroutine()
-    {
-        // First, check if user has location service enabled
-        if (!Input.location.isEnabledByUser)
-        {
-            MatchmoreLogger.Debug("Location service disabled by user");
-# if !UNITY_IOS
-            //https://docs.unity3d.com/ScriptReference/LocationService-isEnabledByUser.html
-            //if it is IOS we do not break here
-            yield break;
-#endif
-        }
-
-
-        // Start service before querying location
-        Input.location.Start();
-
-        // Wait until service initializes
-        int maxWait = 20;
-        while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
-        {
-            yield return new WaitForSeconds(1);
-            maxWait--;
-        }
-
-        // Service didn't initialize in 20 seconds
-        if (maxWait < 1)
-        {
-            yield break;
-        }
-
-        // Connection has failed
-        if (Input.location.status == LocationServiceStatus.Failed)
-        {
-            //print("Unable to determine device location");
-            yield break;
-        }
-
-        _coroutine.SetupContinuousRoutine("location_service", UpdateLocation);
-    }
-
-    private void UpdateLocation()
-    {
-        if (Input.location.status == LocationServiceStatus.Running)
-        {
-            var location = Input.location.lastData;
-
-            UpdateLocation(new Location
-            {
-                Latitude = location.latitude,
-                Longitude = location.longitude,
-                Altitude = location.altitude
-            });
-        }
     }
 
     private void InitGameObjects()
@@ -227,12 +215,19 @@ public partial class Matchmore
         _client.AddDefaultHeader("api-key", _apiKey);
         _deviceApi = new DeviceApi(_client);
         _obj = new GameObject("MatchMoreObject");
-        if(_config.LoggingEnabled){
+        if (_config.LoggingEnabled)
+        {
             MatchmoreLogger.Context = _obj;
         }
         _coroutine = _obj.AddComponent<CoroutineWrapper>();
     }
 
+    /// <summary>
+    /// Creates the device.
+    /// </summary>
+    /// <returns>The device.</returns>
+    /// <param name="device">Device.</param>
+    /// <param name="makeMain">If set to <c>true</c> make main.</param>
     public Device CreateDevice(Device device, bool makeMain = false)
     {
         if (_state == null)
@@ -302,7 +297,12 @@ public partial class Matchmore
         return deviceInBackend;
     }
 
-    public PinDevice CreatePinDevice(PinDevice pinDevice)
+    /// <summary>
+    /// Creates the pin device.
+    /// </summary>
+    /// <returns>The pin device.</returns>
+    /// <param name="pinDevice">Pin device.</param>
+    public PinDevice CreatePinDevice(PinDevice pinDevice, bool ignorePersistence = false)
     {
         pinDevice.DeviceType = Alps.Model.DeviceType.Pin;
         if (pinDevice.Location == null)
@@ -324,26 +324,46 @@ public partial class Matchmore
             Name = createdDevice.Name,
             UpdatedAt = createdDevice.UpdatedAt
         };
-        _state.AddPinDevice(createdPin);
+        if (!ignorePersistence)
+            _state.AddPinDevice(createdPin);
 
         return createdPin;
     }
 
-    public Tuple<PinDevice, IMatchMonitor> CreatePinDeviceAndStartListening(PinDevice pinDevice, MatchChannel channel)
+    /// <summary>
+    /// Creates the pin device and start listening. This is useful when the device also manages pins
+    /// </summary>
+    /// <returns>The pin device and start listening.</returns>
+    /// <param name="pinDevice">Pin device.</param>
+    /// <param name="channel">Channel.</param>
+    public MTuple<PinDevice, IMatchMonitor> CreatePinDeviceAndStartListening(PinDevice pinDevice, MatchChannel channel)
     {
         var createdDevice = CreatePinDevice(pinDevice);
         var monitor = SubscribeMatches(channel, createdDevice);
 
-        return Tuple.New(createdDevice, monitor);
+        return MTuple.New(createdDevice, monitor);
     }
 
+    /// <summary>
+    /// Creates the subscription
+    /// </summary>
+    /// <returns>The subscription.</returns>
+    /// <param name="sub">Sub.</param>
+    /// <param name="device">Device, if null will default to main device</param>
     public Subscription CreateSubscription(Subscription sub, Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
         return CreateSubscription(sub, usedDevice.Id);
     }
 
-    public Subscription CreateSubscription(Subscription sub, string deviceId)
+    /// <summary>
+    /// Creates the subscription.
+    /// </summary>
+    /// <returns>The subscription.</returns>
+    /// <param name="sub">Sub.</param>
+    /// <param name="deviceId">Device identifier.</param>
+    /// <param name="ignorePersistence">If set to <c>true</c> ignore persistence.</param>
+    public Subscription CreateSubscription(Subscription sub, string deviceId, bool ignorePersistence = false)
     {
         if (string.IsNullOrEmpty(deviceId))
         {
@@ -351,17 +371,31 @@ public partial class Matchmore
         }
 
         var _sub = _deviceApi.CreateSubscription(deviceId, sub);
-        _state.AddSubscription(_sub);
+        if (!ignorePersistence)
+            _state.AddSubscription(_sub);
         return _sub;
     }
 
+    /// <summary>
+    /// Creates the publication.
+    /// </summary>
+    /// <returns>The publication.</returns>
+    /// <param name="pub">Pub.</param>
+    /// <param name="device">Device, if null will default to main device</param>
     public Publication CreatePublication(Publication pub, Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
         return CreatePublication(pub, usedDevice.Id);
     }
 
-    public Publication CreatePublication(Publication pub, string deviceId)
+    /// <summary>
+    /// Creates the publication.
+    /// </summary>
+    /// <returns>The publication.</returns>
+    /// <param name="pub">Pub.</param>
+    /// <param name="deviceId">Device identifier.</param>
+    /// /// <param name="ignorePersistence">If set to <c>true</c> ignore persistence.</param>
+    public Publication CreatePublication(Publication pub, string deviceId, bool ignorePersistence = false)
     {
         if (string.IsNullOrEmpty(deviceId))
         {
@@ -369,16 +403,29 @@ public partial class Matchmore
         }
 
         var _pub = _deviceApi.CreatePublication(deviceId, pub);
-        _state.AddPublication(_pub);
+        if (!ignorePersistence)
+            _state.AddPublication(_pub);
         return _pub;
     }
 
+    /// <summary>
+    /// Updates the location.
+    /// </summary>
+    /// <returns>The location.</returns>
+    /// <param name="location">Location.</param>
+    /// <param name="device">Device, if null will default to main device</param>
     public Location UpdateLocation(Location location, Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
         return UpdateLocation(location, usedDevice.Id);
     }
 
+    /// <summary>
+    /// Updates the location.
+    /// </summary>
+    /// <returns>The location.</returns>
+    /// <param name="location">Location.</param>
+    /// <param name="deviceId">Device identifier.</param>
     public Location UpdateLocation(Location location, string deviceId)
     {
         if (string.IsNullOrEmpty(deviceId))
@@ -392,12 +439,23 @@ public partial class Matchmore
         return _deviceApi.CreateLocation(deviceId, location);
     }
 
+
+    /// <summary>
+    /// Gets the matches.
+    /// </summary>
+    /// <returns>The matches.</returns>
+    /// <param name="device">Device, if null will default to main device</param>
     public List<Match> GetMatches(Device device = null)
     {
         var usedDevice = device != null ? device : _state.Device;
         return GetMatches(usedDevice.Id);
     }
 
+    /// <summary>
+    /// Gets the matches.
+    /// </summary>
+    /// <returns>The matches.</returns>
+    /// <param name="deviceId">Device identifier.</param>
     public List<Match> GetMatches(string deviceId)
     {
         if (string.IsNullOrEmpty(deviceId))
@@ -408,6 +466,12 @@ public partial class Matchmore
         return _deviceApi.GetMatches(deviceId);
     }
 
+    /// <summary>
+    /// Subscribes the matches.
+    /// </summary>
+    /// <returns>The matches.</returns>
+    /// <param name="channel">Channel.</param>
+    /// <param name="deviceId">Device identifier.</param>
     public IMatchMonitor SubscribeMatches(MatchChannel channel, string deviceId)
     {
         if (string.IsNullOrEmpty(deviceId))
@@ -418,17 +482,26 @@ public partial class Matchmore
         return SubscribeMatches(channel, FindDevice(deviceId));
     }
 
+    /// <summary>
+    /// Subscribes the matches.
+    /// </summary>
+    /// <returns>The matches.</returns>
+    /// <param name="channel">Channel.</param>
+    /// <param name="device">Device, if null will default to main device</param>
     public IMatchMonitor SubscribeMatches(MatchChannel channel, Device device = null)
     {
         var deviceToSubscribe = device == null ? _state.Device : device;
         IMatchMonitor monitor = null;
         switch (channel)
         {
-            case MatchChannel.Polling:
+            case MatchChannel.polling:
                 monitor = CreatePollingMonitor(deviceToSubscribe);
                 break;
-            case MatchChannel.Websocket:
+            case MatchChannel.websocket:
                 monitor = CreateWebsocketMonitor(deviceToSubscribe);
+                break;
+            case MatchChannel.threadedPolling:
+                monitor = CreateThreadedPollingMonitor(deviceToSubscribe);
                 break;
             default:
                 break;
@@ -463,6 +536,10 @@ public partial class Matchmore
             return _state.Pins.Find(pin => pin.Id == deviceId);
     }
 
+    /// <summary>
+    /// Gets the active subscriptions.
+    /// </summary>
+    /// <value>The active subscriptions.</value>
     public IEnumerable<Subscription> ActiveSubscriptions
     {
         get
@@ -471,6 +548,10 @@ public partial class Matchmore
         }
     }
 
+    /// <summary>
+    /// Gets the active publications.
+    /// </summary>
+    /// <value>The active publications.</value>
     public IEnumerable<Publication> ActivePublications
     {
         get
@@ -479,16 +560,12 @@ public partial class Matchmore
         }
     }
 
+    /// <summary>
+    /// Cleans up. Stops all monitors, destroys the game object
+    /// </summary>
     public void CleanUp()
     {
-        foreach (var monitor in _monitors)
-        {
-            monitor.Value.Stop();
-        }
-
-        _monitors.Clear();
-        _monitors = null;
-
+        StopEverything();
         if (_coroutine != null)
         {
             if (Application.isEditor)
@@ -505,9 +582,30 @@ public partial class Matchmore
         }
     }
 
+    public void StopEverything()
+    {
+        var keys = new List<string>(_monitors.Keys);
+        foreach (var key in keys)
+        {
+            IMatchMonitor monitor = null;
+            if (_monitors.TryGetValue(key, out monitor))
+                monitor.Stop();
+        }
+
+        _monitors.Clear();
+        if (_locationService != null)
+            _locationService.Stop();
+
+    }
+
     private PollingMatchMonitor CreatePollingMonitor(Device device)
     {
         return new PollingMatchMonitor(device, _deviceApi, _coroutine, id => _monitors.Remove(id));
+    }
+
+    private ThreadedPollingMatchMonitor CreateThreadedPollingMonitor(Device device)
+    {
+        return new ThreadedPollingMatchMonitor(device, _deviceApi, _coroutine, id => _monitors.Remove(id));
     }
 
     private WebsocketMatchMonitor CreateWebsocketMonitor(Device device)
