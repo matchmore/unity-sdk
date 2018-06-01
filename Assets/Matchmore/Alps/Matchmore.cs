@@ -165,6 +165,7 @@ public partial class Matchmore
         _apiKey = config.ApiKey;
         _servicePort = config.ServicePort;
         _environment = config.Environment ?? PRODUCTION;
+        config.Environment = _environment;
         _secured = config.UseSecuredCommunication;
         InitGameObjects();
 

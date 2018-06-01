@@ -1,6 +1,6 @@
-# Alps Unity SDK
+# Matchmore Unity SDK
 
-`AlpsSDK` is a contextualized publish/subscribe model which can be used to model any geolocated or proximity based mobile application. Save time and make development easier by using our SDK. We are built on Android Location services and we also provide iBeacons compatibility.
+`Matchmore` is a contextualized publish/subscribe model which can be used to model any geolocated or proximity based mobile application. Save time and make development easier by using our SDK. We are built on Android Location services and we also provide iBeacons compatibility.
 
 ## Unity compatibility
 
@@ -12,7 +12,10 @@ The `Matchmore` is a static wrapper that provides you all the functions you need
 
 ## Usage
 
-```
+```csharp
+        //make sure new TLS is enabled, this is only available in .NET 4.x Equivalent
+        System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12 | System.Net.SecurityProtocolType.Tls11;
+
         //get the api key from our portal
         var config = Matchmore.Config.WithApiKey(apiKey);
         Matchmore.Configure(config);
@@ -86,6 +89,16 @@ The `Matchmore` is a static wrapper that provides you all the functions you need
 
 ```
 
-##Licence
+## TLS 1.1 and 1.2
 
-`Alps Unity SDK` is available under the MIT license. See the LICENSE file for more info.
+We have moved to support newer cyphers as Apple stopped support most of TLS 1.0 cyphers. Some version of Unity might not support this but here is a trick which might make it work.
+
+1. Set Scripting Runtime Version to *.NET 4.x Equivalent*
+If this didn't work
+2. Unzip the SystemSecurity.zip into a folder called *plugins* which can exist anywhere in the solution.
+
+
+
+## Licence
+
+`Matchmore Unity SDK` is available under the MIT license. See the LICENSE file for more info.

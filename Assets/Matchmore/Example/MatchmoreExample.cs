@@ -4,6 +4,7 @@ using Alps.Model;
 using UnityEngine;
 using UnityEngine.UI;
 using MatchmoreExtensions;
+using System.Net;
 
 public class MatchmoreExample : MonoBehaviour
 {
@@ -20,8 +21,11 @@ public class MatchmoreExample : MonoBehaviour
 
     public void Start()
     {
+        //only works if you put the DDLs
+        //System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
         var config = Matchmore.Config.WithApiKey(apiKey);
-        config.UseSecuredCommunication = false;
+
+        config.UseSecuredCommunication = true;
         Matchmore.Configure(config);
         Matchmore.Instance.WipeData();
     }
