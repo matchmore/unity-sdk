@@ -10,7 +10,12 @@ SDK is written for Unity 2017 and support Windows, Mac, Android and iOS.
 
 The `Matchmore` is a static wrapper that provides you all the functions you need to use our SDK.
 
+## Installation
+
+Clone and copy contents *Assets/Matchmore* of the repository into *Assets/Matchmore*. You can change the target folder
+
 ## Usage
+
 
 ```csharp
         //make sure new TLS is enabled, this is only available in .NET 4.x Equivalent
